@@ -1,0 +1,360 @@
+:root {
+  --ink: #111326;
+  --paper: #f8fbff;
+  --panel: rgba(255, 255, 255, 0.9);
+  --panel-strong: #ffffff;
+  --line: rgba(17, 19, 38, 0.14);
+  --accent: #ff3f8e;
+  --accent-2: #17c8ff;
+  --accent-3: #ffe95f;
+  --good: #26c281;
+  --bad: #ff4b4b;
+  --mutagen: #7eff70;
+  --credits: #ffd64d;
+  --shadow: 0 20px 60px rgba(20, 24, 50, 0.22);
+  color-scheme: light;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(circle at 14% 12%, rgba(255, 233, 95, 0.34), transparent 24rem),
+    radial-gradient(circle at 80% 8%, rgba(23, 200, 255, 0.28), transparent 22rem),
+    linear-gradient(135deg, #f8fbff 0%, #ffeaf4 50%, #e8fbff 100%);
+  color: var(--ink);
+}
+
+body {
+  overflow-x: hidden;
+}
+
+button {
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+  color: var(--ink);
+  min-height: 42px;
+  border-radius: 8px;
+  padding: 0 14px;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 7px 18px rgba(20, 24, 50, 0.08);
+  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+button:hover,
+button:focus-visible,
+.focus-ring {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255, 63, 142, 0.2), 0 10px 24px rgba(20, 24, 50, 0.14);
+  outline: 0;
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+  transform: none;
+}
+
+.primary {
+  background: linear-gradient(135deg, var(--accent), #ff7b3f);
+  border-color: rgba(255, 63, 142, 0.5);
+  color: #fff;
+}
+
+.shell {
+  width: min(1480px, calc(100vw - 24px));
+  margin: 0 auto;
+  padding: 16px 0 28px;
+}
+
+.hero-strip {
+  min-height: 118px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: var(--shadow);
+}
+
+.kicker {
+  margin: 0 0 4px;
+  color: #505575;
+  font-size: 0.8rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  max-width: 760px;
+  font-size: clamp(2rem, 4.2vw, 4.4rem);
+  line-height: 0.95;
+  letter-spacing: 0;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(110px, 1fr));
+  gap: 8px;
+  min-width: min(100%, 450px);
+}
+
+.stat {
+  min-height: 58px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-strong);
+}
+
+.stat span {
+  display: block;
+  color: #606784;
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.stat strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 1.25rem;
+}
+
+.game-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 390px;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.arena-wrap,
+.side-panel,
+.log-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.arena-wrap {
+  overflow: hidden;
+}
+
+#battleCanvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #13204c;
+}
+
+.battle-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 10px;
+}
+
+.side-panel {
+  overflow: hidden;
+  min-height: 620px;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.tab {
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.tab.active {
+  background: #fff;
+  color: var(--accent);
+}
+
+#panelContent {
+  padding: 12px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: #4e5575;
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.grid-list {
+  display: grid;
+  gap: 10px;
+}
+
+.card {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 96px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.portrait {
+  width: 72px;
+  height: 72px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  background-size: var(--atlas-w, 620px) auto;
+  background-image: url("assets/omega-city-atlas.png");
+  box-shadow: inset 0 0 0 1px rgba(17, 19, 38, 0.12), 0 8px 18px rgba(20, 24, 50, 0.12);
+}
+
+.card h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  line-height: 1.15;
+}
+
+.meta {
+  margin: 0;
+  color: #5b637e;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid rgba(17, 19, 38, 0.11);
+  border-radius: 999px;
+  background: #f5f8ff;
+  color: #434a6a;
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.row-actions button {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 0.82rem;
+}
+
+.empty {
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed rgba(17, 19, 38, 0.22);
+  border-radius: 8px;
+  color: #626984;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.log-panel {
+  margin-top: 14px;
+  padding: 12px 14px;
+}
+
+#eventLog {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#eventLog li {
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.86);
+  color: #3d435c;
+  font-size: 0.84rem;
+}
+
+@media (max-width: 1100px) {
+  .game-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .side-panel {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .shell {
+    width: min(100vw - 14px, 1480px);
+    padding-top: 8px;
+  }
+
+  .hero-strip {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 14px;
+  }
+
+  .stats,
+  .battle-actions,
+  #eventLog {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .card {
+    grid-template-columns: 62px minmax(0, 1fr);
+  }
+
+  .portrait {
+    width: 62px;
+    height: 62px;
+  }
+
+  #focusHint {
+    display: none;
+  }
+}

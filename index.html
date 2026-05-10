@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Omega City Mutagen War</title>
+    <meta
+      name="description"
+      content="A static superhero roguelike auto battler for GitHub Pages."
+    >
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero-strip" aria-label="Run status">
+        <div>
+          <p class="kicker">Omega City Mutagen War</p>
+          <h1>Forge the ultimate hero team.</h1>
+        </div>
+        <div class="stats" id="runStats"></div>
+      </section>
+
+      <section class="game-layout">
+        <div class="arena-wrap">
+          <canvas id="battleCanvas" width="1280" height="720" aria-label="Battlefield"></canvas>
+          <div class="battle-actions">
+            <button class="primary" data-action="startBattle">Start Battle</button>
+            <button data-action="rerollShop">Reroll Shop</button>
+            <button data-action="newRun">New Run</button>
+          </div>
+        </div>
+
+        <aside class="side-panel" aria-label="Command panel">
+          <div class="tabs" role="tablist">
+            <button class="tab active" data-tab="shop">Shop</button>
+            <button class="tab" data-tab="squad">Squad</button>
+            <button class="tab" data-tab="gear">Gear</button>
+          </div>
+          <div id="panelContent"></div>
+        </aside>
+      </section>
+
+      <section class="log-panel" aria-label="Battle log">
+        <div class="section-title">
+          <span>War Room</span>
+          <span id="focusHint">Gamepad: D-pad move, A select, X reroll, Y battle</span>
+        </div>
+        <ol id="eventLog"></ol>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
