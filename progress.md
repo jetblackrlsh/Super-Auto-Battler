@@ -133,6 +133,13 @@ Original prompt: Make this project a public git hub repo. I want this to be a st
 - Updated How to Play wording so K/D is described as kills / deaths.
 - Verification: `node --check app.js`; targeted Playwright state check forced a 3 kill / 1 death record and confirmed the squad card displayed `K/D: 3 / 1`; web-game client smoke confirmed fresh records expose `display: "0 / 0"` and rendered a normal battle with no error artifacts.
 
+## 2026-05-10 Role Mechanics Follow-up
+
+- Added concrete role mechanics for every hero archetype: Bruisers gain frontline stats, Strikers finish wounded enemies, Medics heal after attacking, Snipers target low armor and pierce armor, Tanks draw enemy targeting and reduce damage, Supports grant a team aura, and Brawlers rage under half HP.
+- Added role rule text to hero cards, shop recruit cards, How to Play, and `render_game_to_text()`.
+- Updated active squad battle-stat previews to include formation and role effects, so role advantages are visible before starting battle.
+- Verification: `node --check app.js`; targeted Playwright probe confirmed Tank targeting, Striker targeting, Sniper armor piercing, Brawler rage damage, Medic healing, Support aura, and Bruiser frontline stats; screenshots inspected for squad role rules and How to Play role guidance; web-game client smoke started a battle through the keyboard focus path and rendered normally with no error artifacts.
+
 ## TODO
 
-- No open TODOs for the K/D display follow-up.
+- No open TODOs for the role mechanics follow-up.

@@ -102,6 +102,15 @@ const TRAIT_BONUS_TEXT = {
   Mystic: "+2 ATK, +0.06 SPD",
   Mutant: "+9 HP, +1 ATK",
 };
+const ROLE_RULES = {
+  Bruiser: "Frontline role: +2 ATK and +2 ARM when placed first.",
+  Striker: "Finisher role: targets the most wounded enemy and deals +2 damage to enemies below half HP.",
+  Medic: "Triage role: heals the most wounded living ally for 5 HP after attacking.",
+  Sniper: "Piercing role: targets the lowest-armor enemy and ignores half of enemy armor.",
+  Tank: "Guardian role: enemies target Tanks first, and Tanks take 20% less damage.",
+  Support: "Command role: while active, all heroes gain +1 ATK and +0.05 SPD.",
+  Brawler: "Rage role: below half HP, deals 35% more damage.",
+};
 const GEAR_QUALITY = {
   max: 100,
   min: 25,
@@ -701,6 +710,10 @@ function unitBattleStats(unit) {
   if ((counts.Crystal || 0) >= 2) armor += 2;
   if ((counts.Mystic || 0) >= 2) atk += 2, speed += 0.06;
   if ((counts.Mutant || 0) >= 2) hp += 9, atk += 1;
+  if (activeUnits().some((active) => active.role === "Support")) {
+    atk += 1;
+    speed += 0.05;
+  }
   return { hp, maxHp: hp, atk, armor, speed };
 }
 
@@ -709,11 +722,13 @@ function heroBattleStats(unit, index, lineupLength = activeUnits().length) {
   const frontlineHp = index === 0 ? 8 : 0;
   const frontlineArmor = index === 0 ? 3 : 0;
   const backlineAttack = index >= Math.max(1, lineupLength - 2) ? 2 : 0;
+  const bruiserAttack = unit.role === "Bruiser" && index === 0 ? 2 : 0;
+  const bruiserArmor = unit.role === "Bruiser" && index === 0 ? 2 : 0;
   return {
     hp: stats.hp + frontlineHp,
     maxHp: stats.maxHp + frontlineHp,
-    atk: stats.atk + backlineAttack,
-    armor: stats.armor + frontlineArmor,
+    atk: stats.atk + backlineAttack + bruiserAttack,
+    armor: stats.armor + frontlineArmor + bruiserArmor,
     speed: stats.speed,
   };
 }
@@ -808,6 +823,7 @@ function startBattle() {
     return {
       id: unit.id,
       name: unit.name,
+      role: unit.role,
       sprite: unit.sprite,
       maxHp: stats.maxHp,
       hp: stats.hp,
@@ -842,6 +858,24 @@ function alive(list) {
 
 function nearest(source, list) {
   return alive(list).sort((a, b) => Math.abs(a.x - source.x) - Math.abs(b.x - source.x))[0];
+}
+
+function lowestHealthTarget(list) {
+  return alive(list).sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp) || a.hp - b.hp)[0];
+}
+
+function lowestArmorTarget(list) {
+  return alive(list).sort((a, b) => a.armor - b.armor || (a.hp / a.maxHp) - (b.hp / b.maxHp))[0];
+}
+
+function targetFor(unit, battle) {
+  if (unit.side === "hero") {
+    if (unit.role === "Striker") return lowestHealthTarget(battle.enemies);
+    if (unit.role === "Sniper") return lowestArmorTarget(battle.enemies);
+    return nearest(unit, battle.enemies);
+  }
+  const tanks = alive(battle.heroes).filter((hero) => hero.role === "Tank");
+  return tanks.length ? nearest(unit, tanks) : nearest(unit, battle.heroes);
 }
 
 function letterGrade(score) {
@@ -916,9 +950,42 @@ function addUnitDeath(id) {
   if (unit) unit.deaths += 1;
 }
 
+function roleDamage(attacker, defender) {
+  const armorPenalty = attacker.role === "Sniper" ? 0.275 : 0.55;
+  let damage = Math.max(1, Math.round(attacker.atk - defender.armor * armorPenalty + rand(4)));
+  if (attacker.role === "Striker" && defender.hp / defender.maxHp <= 0.5) damage += 2;
+  if (attacker.role === "Brawler" && attacker.hp / attacker.maxHp <= 0.5) damage = Math.ceil(damage * 1.35);
+  if (defender.role === "Tank") damage = Math.max(1, Math.ceil(damage * 0.8));
+  return damage;
+}
+
+function medicHeal(attacker) {
+  if (attacker.role !== "Medic" || attacker.side !== "hero" || !state.battle) return;
+  const ally = alive(state.battle.heroes)
+    .filter((hero) => hero.hp < hero.maxHp)
+    .sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp))[0];
+  if (!ally) return;
+  const amount = Math.min(5, Math.round(ally.maxHp - ally.hp));
+  if (amount <= 0) return;
+  ally.hp += amount;
+  if (state.battle.floaters.length < 18) {
+    state.battle.floaters.push({ text: `+${amount}`, x: ally.x, y: ally.y - 96, ttl: 0.85, side: ally.side, color: "#7df6ff" });
+  }
+  state.battle.effects.push({
+    type: "storm",
+    color: "#7df6ff",
+    fromX: attacker.x,
+    fromY: attacker.y - 42,
+    toX: ally.x,
+    toY: ally.y - 48,
+    ttl: 0.42,
+    max: 0.42,
+  });
+}
+
 function hit(attacker, defender) {
   const wasAlive = defender.hp > 0;
-  const damage = Math.max(1, Math.round(attacker.atk - defender.armor * 0.55 + rand(4)));
+  const damage = roleDamage(attacker, defender);
   defender.hp = Math.max(0, defender.hp - damage);
   defender.hitFlash = 0.24;
   attacker.attackFlash = 0.26;
@@ -941,6 +1008,7 @@ function hit(attacker, defender) {
     if (attacker.side === "hero" && defender.side === "enemy") addUnitKill(attacker.id);
     if (defender.side === "hero") addUnitDeath(defender.id);
   }
+  medicHeal(attacker);
 }
 
 function updateBattle(dt) {
@@ -956,7 +1024,7 @@ function updateBattle(dt) {
     if (unit.hp <= 0) return;
     unit.y = unit.baseY + Math.sin(battle.time * (5.5 + unit.speed) + unit.id) * 5;
     if (unit.cooldown <= 0) {
-      const target = unit.side === "hero" ? nearest(unit, battle.enemies) : nearest(unit, battle.heroes);
+      const target = targetFor(unit, battle);
       if (target) {
         hit(unit, target);
         unit.cooldown = 0.85 + rand(30) / 100;
@@ -1137,7 +1205,7 @@ function unitCard(unit) {
   const canDeploy = !isActive && activeUnits().length < MAX_ACTIVE_UNITS;
   const creditRefund = sellValue(unit.investedCredits);
   const mutagenRefund = sellValue(unit.investedMutagens);
-  const stats = unitBattleStats(unit);
+  const stats = isActive ? heroBattleStats(unit, position, activeUnits().length) : unitBattleStats(unit);
   const record = combatRecord(unit);
   return `
     <article class="card hero-card">
@@ -1145,6 +1213,7 @@ function unitCard(unit) {
       <div>
         <h3>${unit.name}</h3>
         <p class="meta">Lv ${unit.level} ${unit.role} | ${unit.ability}</p>
+        <p class="meta">${ROLE_RULES[unit.role]}</p>
         <p class="lore">${unit.lore}</p>
         <div class="chips">
           <span class="chip">${isActive ? `Active ${position + 1}` : "Benched"}</span>
@@ -1262,6 +1331,7 @@ function shopUnitCard(unit, index) {
       <div>
         <h3>${unit.name}</h3>
         <p class="meta">${unit.role} | ${unit.ability}</p>
+        <p class="meta">${ROLE_RULES[unit.role]}</p>
         <p class="lore">${unit.lore}</p>
         <div class="chips"><span class="chip">Type ${unit.trait}</span><span class="chip">Cost ${unit.cost}</span></div>
         <div class="row-actions"><button data-action="buyUnit" data-index="${index}" ${state.credits < unit.cost ? "disabled" : ""}>${state.squad.some((owned) => owned.template === unit.name) ? "Buy Duplicate Upgrade" : "Buy Unit"}</button></div>
@@ -1368,11 +1438,12 @@ function renderPage() {
           <section><h3>3. Bench</h3><p>Bench heroes stay owned. You can equip and upgrade them without using an active battle slot.</p></section>
           <section><h3>4. Gear Quality</h3><p>Equipped gear loses quality when active heroes battle, reducing its bonuses. Unequip gear into the armory to restore more quality each rested battle.</p></section>
           <section><h3>5. Types</h3><p>Types matter twice. Active heroes and equipped gear count toward team type bonuses at x2, and gear equipped to a matching hero gets +${Math.round(TYPE_MATCH_BONUS * 100)}% gear stats.</p></section>
-          <section><h3>6. Upgrade</h3><p>Spend mutagens on hero upgrades and credits on gear upgrades. Gear slots are unlimited.</p></section>
-          <section><h3>7. Sell</h3><p>Sell units, gear, or trade ${MUTAGEN_SALE.cost} mutagens for ${MUTAGEN_SALE.credits} credits when you need resources. Refunds are useful but lower than the full investment.</p></section>
-          <section><h3>8. Scout</h3><p>Threat Intel shows the next enemy team, each enemy's stats, and whether your active lineup has the total stat advantage.</p></section>
-          <section><h3>9. Perform</h3><p>Squad cards track each hero's K/D as kills / deaths. After each battle, earn a grade from knockouts, survivors, and remaining HP.</p></section>
-          <section><h3>10. Win the Run</h3><p>Win by defeating all enemies. If every active hero falls, lose 1 health. Win 10 battles before health reaches 0.</p></section>
+          <section><h3>6. Roles</h3><p>Roles define combat jobs: Tanks guard, Bruisers want the front, Strikers finish wounded enemies, Snipers pierce armor, Medics heal, Supports buff the team, and Brawlers rage when hurt.</p></section>
+          <section><h3>7. Upgrade</h3><p>Spend mutagens on hero upgrades and credits on gear upgrades. Gear slots are unlimited.</p></section>
+          <section><h3>8. Sell</h3><p>Sell units, gear, or trade ${MUTAGEN_SALE.cost} mutagens for ${MUTAGEN_SALE.credits} credits when you need resources. Refunds are useful but lower than the full investment.</p></section>
+          <section><h3>9. Scout</h3><p>Threat Intel shows the next enemy team, each enemy's stats, and whether your active lineup has the total stat advantage.</p></section>
+          <section><h3>10. Perform</h3><p>Squad cards track each hero's K/D as kills / deaths. After each battle, earn a grade from knockouts, survivors, and remaining HP.</p></section>
+          <section><h3>11. Win the Run</h3><p>Win by defeating all enemies. If every active hero falls, lose 1 health. Win 10 battles before health reaches 0.</p></section>
         </div>
       </article>
     `;
@@ -1615,7 +1686,7 @@ function drawEffect(effect) {
 function drawFloater(floater) {
   ctx.save();
   ctx.globalAlpha = Math.max(0, floater.ttl);
-  ctx.fillStyle = floater.side === "hero" ? "#ff4b8b" : "#fff05b";
+  ctx.fillStyle = floater.color || (floater.side === "hero" ? "#ff4b8b" : "#fff05b");
   ctx.strokeStyle = "#000";
   ctx.lineWidth = 4;
   ctx.font = "900 28px system-ui";
@@ -1851,16 +1922,18 @@ function renderGameToText() {
   const difficulty = adaptiveDifficulty();
   const battle = state.battle ? {
     status: state.battle.status,
-    heroes: state.battle.heroes.map(({ name, hp, maxHp, atk, armor, x, y, defeated }) => ({ name, hp: Math.round(hp), maxHp, atk, armor, defeated: !!defeated, x: Math.round(x), y: Math.round(y) })),
+    heroes: state.battle.heroes.map(({ name, role, hp, maxHp, atk, armor, x, y, defeated }) => ({ name, role, hp: Math.round(hp), maxHp, atk, armor, defeated: !!defeated, x: Math.round(x), y: Math.round(y) })),
     enemies: state.battle.enemies.map(({ name, hp, maxHp, atk, armor, x, y, defeated }) => ({ name, hp: Math.round(hp), maxHp, atk, armor, defeated: !!defeated, x: Math.round(x), y: Math.round(y) })),
     activeEffects: state.battle.effects.map(({ type, side }) => ({ type, side: side || null })),
   } : null;
-  const unitSummary = (unit, index) => {
-    const stats = unitBattleStats(unit);
+  const unitSummary = (unit, index, isActive = false) => {
+    const stats = isActive ? heroBattleStats(unit, index, activeUnits().length) : unitBattleStats(unit);
     const record = combatRecord(unit);
     return {
       name: unit.name,
       level: unit.level,
+      role: unit.role,
+      roleRule: ROLE_RULES[unit.role],
       position: index + 1,
       formation: index === 0 ? "frontline" : index >= Math.max(1, activeUnits().length - 2) ? "backline" : "midline",
       trait: unit.trait,
@@ -1905,6 +1978,7 @@ function renderGameToText() {
       activeTypeBonuses: traitBonuses(),
       typeCounts: traitCounts(),
     },
+    roleRules: { ...ROLE_RULES },
     adaptiveDifficulty: { ...difficulty },
     teamComparison: comparison,
     upcomingEnemies: plannedEnemies().map((enemy) => ({
@@ -1915,7 +1989,7 @@ function renderGameToText() {
       speed: Number(enemy.speed.toFixed(2)),
       power: statPower(enemy),
     })),
-    activeLineup: activeUnits().map(unitSummary),
+    activeLineup: activeUnits().map((unit, index) => unitSummary(unit, index, true)),
     bench: benchUnits().map((unit, index) => unitSummary(unit, index)),
     armory: state.gear.map((gear) => ({ name: gear.name, level: gear.level, quality: Math.round(gearQuality(gear)), restBattles: gear.restBattles || 0, mods: gear.mods, effectiveMods: effectiveMods(gear) })),
     shop: {
