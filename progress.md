@@ -140,6 +140,15 @@ Original prompt: Make this project a public git hub repo. I want this to be a st
 - Updated active squad battle-stat previews to include formation and role effects, so role advantages are visible before starting battle.
 - Verification: `node --check app.js`; targeted Playwright probe confirmed Tank targeting, Striker targeting, Sniper armor piercing, Brawler rage damage, Medic healing, Support aura, and Bruiser frontline stats; screenshots inspected for squad role rules and How to Play role guidance; web-game client smoke started a battle through the keyboard focus path and rendered normally with no error artifacts.
 
+## 2026-05-10 Advantage-Based Difficulty Follow-up
+
+- Replaced grade-spike adaptive difficulty with advantage-based rivalry scaling.
+- A won battle now records the player's starting Hero Power advantage and uses that value as the next wave's target Enemy Power advantage.
+- Enemy plans now recalculate against the current active team, so upgrading, equipping, benching, or reordering heroes keeps the next wave scaled to the stored advantage target rather than a fixed stage multiplier.
+- Added `lastBattleAdvantage`, `enemyAdvantageTarget`, battle-start power, and updated adaptive difficulty details to `render_game_to_text()`.
+- Updated How to Play with the new Difficulty rule.
+- Verification: `node --check app.js`; targeted Playwright probe confirmed a +29 winning advantage produced a next-wave -29 Threat Intel advantage, then increasing hero power caused enemy power to rise and preserve the -29 target; screenshots inspected for Threat Intel and How to Play; web-game client smoke started a battle through the keyboard focus path and rendered normally with no error artifacts.
+
 ## TODO
 
-- No open TODOs for the role mechanics follow-up.
+- No open TODOs for the advantage-based difficulty follow-up.

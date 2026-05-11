@@ -127,15 +127,6 @@ const GRADE_REWARDS = {
   D: { credits: 3, mutagens: 1 },
   F: { credits: 2, mutagens: 1 },
 };
-const GRADE_DIFFICULTY = {
-  S: { threat: 0.28, extraEnemies: 1, label: "Omega City crisis spike" },
-  A: { threat: 0.18, extraEnemies: 1, label: "villains escalate" },
-  B: { threat: 0.08, extraEnemies: 0, label: "villains adapt" },
-  C: { threat: 0, extraEnemies: 0, label: "standard threat" },
-  D: { threat: -0.05, extraEnemies: 0, label: "villains hesitate" },
-  F: { threat: -0.1, extraEnemies: 0, label: "villains regroup" },
-};
-
 let uid = 1;
 let activeTab = "shop";
 let activePage = "battle";
@@ -163,6 +154,8 @@ const state = {
   runLost: false,
   lastBattleGrade: null,
   lastBattleTune: null,
+  lastBattleAdvantage: 0,
+  enemyAdvantageTarget: 0,
   celebration: null,
 };
 
@@ -399,6 +392,8 @@ function resetRun() {
     runLost: false,
     lastBattleGrade: null,
     lastBattleTune: null,
+    lastBattleAdvantage: 0,
+    enemyAdvantageTarget: 0,
     celebration: null,
   });
   refreshEnemyPlan();
@@ -734,12 +729,18 @@ function heroBattleStats(unit, index, lineupLength = activeUnits().length) {
 }
 
 function adaptiveDifficulty() {
-  return GRADE_DIFFICULTY[state.lastBattleGrade] || { threat: 0, extraEnemies: 0, label: "first assault" };
+  const target = Math.max(0, Math.round(state.enemyAdvantageTarget || 0));
+  return {
+    threat: 0,
+    extraEnemies: 0,
+    playerWinAdvantage: Math.max(0, Math.round(state.lastBattleAdvantage || 0)),
+    targetEnemyAdvantage: target,
+    label: target > 0 ? `villains counter your +${target} edge` : "baseline assault",
+  };
 }
 
 function refreshEnemyPlan() {
-  const adaptive = adaptiveDifficulty();
-  const count = Math.min(5, 2 + Math.floor(state.stage / 2) + adaptive.extraEnemies);
+  const count = Math.min(5, 2 + Math.floor(state.stage / 2));
   state.enemyPlan = Array.from({ length: count }, (_, index) => (
     index === count - 1 && state.stage % 3 === 0 ? 7 : rand(VILLAIN_POOL.length)
   ));
@@ -749,25 +750,71 @@ function ensureEnemyPlan() {
   if (!state.enemyPlan.length) refreshEnemyPlan();
 }
 
-function enemyStats(template) {
-  const adaptive = adaptiveDifficulty();
-  const scale = Math.max(0.75, 1 + (state.stage - 1) * 0.18 + adaptive.threat);
+function baseEnemyStats(template) {
+  const scale = Math.max(0.75, 1 + (state.stage - 1) * 0.18);
   const hp = Math.round(template.hp * scale);
   return {
     hp,
     maxHp: hp,
     atk: Math.round(template.atk * scale),
-    armor: Math.max(0, Math.round(template.armor + state.stage * 0.3 + adaptive.threat * 3)),
-    speed: Math.max(0.45, template.speed + state.stage * 0.018 + adaptive.threat * 0.08),
+    armor: Math.max(0, Math.round(template.armor + state.stage * 0.3)),
+    speed: Math.max(0.45, template.speed + state.stage * 0.018),
   };
+}
+
+function enemyPlanPower(enemies) {
+  return enemies.reduce((sum, enemy) => sum + statPower(enemy), 0);
+}
+
+function scaleEnemyPlanToAdvantage(enemies) {
+  const targetAdvantage = Math.max(0, Math.round(state.enemyAdvantageTarget || 0));
+  if (!targetAdvantage || !activeUnits().length || !enemies.length) return enemies;
+  const desiredPower = Math.max(1, teamTotals().power + targetAdvantage);
+  const basePower = enemyPlanPower(enemies);
+  if (!basePower) return enemies;
+  const multiplier = Math.max(0.35, desiredPower / basePower);
+  const scaled = enemies.map((enemy) => {
+    const hp = Math.max(8, Math.round(enemy.maxHp * multiplier));
+    return {
+      ...enemy,
+      hp,
+      maxHp: hp,
+      atk: Math.max(1, Math.round(enemy.atk * multiplier)),
+      armor: Math.max(0, Math.round(enemy.armor * multiplier)),
+      speed: Math.max(0.45, Number((enemy.speed * Math.sqrt(multiplier)).toFixed(2))),
+    };
+  });
+  let diff = desiredPower - enemyPlanPower(scaled);
+  if (diff > 0) {
+    const perEnemy = Math.floor(diff / scaled.length);
+    let remainder = diff % scaled.length;
+    scaled.forEach((enemy) => {
+      const added = perEnemy + (remainder > 0 ? 1 : 0);
+      enemy.hp += added;
+      enemy.maxHp += added;
+      if (remainder > 0) remainder -= 1;
+    });
+  } else if (diff < 0) {
+    let remaining = -diff;
+    let safety = 0;
+    while (remaining > 0 && safety < 10000) {
+      const target = scaled.find((enemy) => enemy.maxHp > 8);
+      if (!target) break;
+      target.hp -= 1;
+      target.maxHp -= 1;
+      remaining -= 1;
+      safety += 1;
+    }
+  }
+  return scaled;
 }
 
 function plannedEnemies() {
   ensureEnemyPlan();
-  return state.enemyPlan.map((templateIndex, index) => {
+  const enemies = state.enemyPlan.map((templateIndex, index) => {
     const template = VILLAIN_POOL[templateIndex];
     return {
-      ...enemyStats(template),
+      ...baseEnemyStats(template),
       name: template.name,
       templateIndex,
       sprite: template.sprite,
@@ -780,6 +827,7 @@ function plannedEnemies() {
       baseY: 380 + (index % 2) * 80,
     };
   });
+  return scaleEnemyPlanToAdvantage(enemies);
 }
 
 function buildEnemies() {
@@ -845,7 +893,24 @@ function startBattle() {
       defeated: false,
     };
   });
-  state.battle = { time: 0, status: "fighting", heroes, enemies: buildEnemies(), floaters: [], effects: [] };
+  const enemies = buildEnemies();
+  const heroPower = heroes.reduce((sum, hero) => sum + statPower(hero), 0);
+  const enemyPower = enemies.reduce((sum, enemy) => sum + statPower(enemy), 0);
+  state.lastBattleAdvantage = heroPower - enemyPower;
+  state.battle = {
+    time: 0,
+    status: "fighting",
+    heroes,
+    enemies,
+    power: {
+      heroes: heroPower,
+      enemies: enemyPower,
+      advantage: heroPower - enemyPower,
+      targetEnemyAdvantage: Math.round(state.enemyAdvantageTarget || 0),
+    },
+    floaters: [],
+    effects: [],
+  };
   state.mode = "battle";
   log(`Battle ${state.victories + 1}/10: the villain army attacks.`);
   playMidiEffect([60, 64, 67, 72]);
@@ -1063,6 +1128,8 @@ function finishBattle(won) {
   playBattleResultTune(won);
   if (won) state.victories += 1;
   if (!won) state.health -= 1;
+  if (won) state.enemyAdvantageTarget = Math.max(0, state.battle.power?.advantage || 0);
+  if (!won) state.enemyAdvantageTarget = Math.max(0, Math.floor((state.enemyAdvantageTarget || 0) / 2));
   state.resultBanner = { text: won ? "VICTORY" : "DEFEAT", won, performance };
   log(`${won ? "Victory" : "Defeat"} Grade ${performance.grade}: +${creditGain} credits, +${mutagenGain} mutagens. Enemies ${performance.enemiesDefeated}/${performance.totalEnemies}, heroes ${performance.heroesAlive}/${performance.totalHeroes}, HP ${performance.totalHealthRemaining}/${performance.maxTeamHealth}${won ? "." : ", -1 health."}`);
   if (state.health <= 0) {
@@ -1442,8 +1509,9 @@ function renderPage() {
           <section><h3>7. Upgrade</h3><p>Spend mutagens on hero upgrades and credits on gear upgrades. Gear slots are unlimited.</p></section>
           <section><h3>8. Sell</h3><p>Sell units, gear, or trade ${MUTAGEN_SALE.cost} mutagens for ${MUTAGEN_SALE.credits} credits when you need resources. Refunds are useful but lower than the full investment.</p></section>
           <section><h3>9. Scout</h3><p>Threat Intel shows the next enemy team, each enemy's stats, and whether your active lineup has the total stat advantage.</p></section>
-          <section><h3>10. Perform</h3><p>Squad cards track each hero's K/D as kills / deaths. After each battle, earn a grade from knockouts, survivors, and remaining HP.</p></section>
-          <section><h3>11. Win the Run</h3><p>Win by defeating all enemies. If every active hero falls, lose 1 health. Win 10 battles before health reaches 0.</p></section>
+          <section><h3>10. Difficulty</h3><p>After a win, the next wave scales to beat your current Hero Power by the same advantage you had at the start of the won battle.</p></section>
+          <section><h3>11. Perform</h3><p>Squad cards track each hero's K/D as kills / deaths. After each battle, earn a grade from knockouts, survivors, and remaining HP.</p></section>
+          <section><h3>12. Win the Run</h3><p>Win by defeating all enemies. If every active hero falls, lose 1 health. Win 10 battles before health reaches 0.</p></section>
         </div>
       </article>
     `;
@@ -1922,6 +1990,7 @@ function renderGameToText() {
   const difficulty = adaptiveDifficulty();
   const battle = state.battle ? {
     status: state.battle.status,
+    power: state.battle.power ? { ...state.battle.power } : null,
     heroes: state.battle.heroes.map(({ name, role, hp, maxHp, atk, armor, x, y, defeated }) => ({ name, role, hp: Math.round(hp), maxHp, atk, armor, defeated: !!defeated, x: Math.round(x), y: Math.round(y) })),
     enemies: state.battle.enemies.map(({ name, hp, maxHp, atk, armor, x, y, defeated }) => ({ name, hp: Math.round(hp), maxHp, atk, armor, defeated: !!defeated, x: Math.round(x), y: Math.round(y) })),
     activeEffects: state.battle.effects.map(({ type, side }) => ({ type, side: side || null })),
@@ -1972,6 +2041,8 @@ function renderGameToText() {
     mutagens: state.mutagens,
     lastBattleGrade: state.lastBattleGrade,
     lastBattleTune: state.lastBattleTune,
+    lastBattleAdvantage: Math.round(state.lastBattleAdvantage || 0),
+    enemyAdvantageTarget: Math.round(state.enemyAdvantageTarget || 0),
     celebration: state.celebration ? { ttl: Number(state.celebration.ttl.toFixed(2)), max: state.celebration.max } : null,
     typeRules: {
       matchBonusPercent: Math.round(TYPE_MATCH_BONUS * 100),
