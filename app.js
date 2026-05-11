@@ -82,6 +82,8 @@ const GEAR_POOL = [
   { name: "Chaos Reactor", cost: 6, icon: 11, mods: { atk: 4, hp: 8 }, trait: "Mystic", lore: "A forbidden battery that turns rift energy into one more chance to win." },
 ];
 
+const MAX_ACTIVE_UNITS = 4;
+
 let uid = 1;
 let activeTab = "shop";
 let activePage = "battle";
@@ -151,7 +153,7 @@ function cloneUnit(template) {
     atk: template.atk,
     armor: template.armor,
     speed: template.speed,
-    active: activeUnits().length < 5,
+    active: activeUnits().length < MAX_ACTIVE_UNITS,
     duplicateCount: 1,
     investedCredits: template.cost,
     investedMutagens: 0,
@@ -385,7 +387,7 @@ function toggleBench(id) {
   if (unit.active) {
     unit.active = false;
     log(`${unit.name} moved to the bench.`);
-  } else if (activeUnits().length < 5) {
+  } else if (activeUnits().length < MAX_ACTIVE_UNITS) {
     unit.active = true;
     log(`${unit.name} deployed to the active lineup.`);
   }
@@ -635,7 +637,7 @@ function unitCard(unit) {
   const selectedGear = gearById(state.selectedGearId);
   const position = activeIndex(unit);
   const isActive = unit.active;
-  const canDeploy = !isActive && activeUnits().length < 5;
+  const canDeploy = !isActive && activeUnits().length < MAX_ACTIVE_UNITS;
   const creditRefund = sellValue(unit.investedCredits);
   const mutagenRefund = sellValue(unit.investedMutagens);
   return `
@@ -692,7 +694,7 @@ function renderPanel() {
   const root = document.getElementById("panelContent");
   if (activeTab === "shop") {
     root.innerHTML = `
-      <div class="section-title"><span>Recruit</span><span>Active ${activeUnits().length}/5 | Owned ${state.squad.length}</span></div>
+      <div class="section-title"><span>Recruit</span><span>Active ${activeUnits().length}/${MAX_ACTIVE_UNITS} | Owned ${state.squad.length}</span></div>
       <div class="grid-list">
         ${state.shop.units.map((unit, index) => `
           <article class="card">
@@ -778,7 +780,7 @@ function renderPage() {
         <h2>How to Play</h2>
         <div class="info-grid">
           <section><h3>1. Build</h3><p>Spend credits on heroes and gear. Buying a duplicate hero merges it into your owned copy as a free level upgrade.</p></section>
-          <section><h3>2. Line Up</h3><p>Deploy up to 5 active heroes. The first active hero is the frontline and draws fire; the backline gets extra attack.</p></section>
+          <section><h3>2. Line Up</h3><p>Deploy up to 4 active heroes. The first active hero is the frontline and draws fire; the backline gets extra attack.</p></section>
           <section><h3>3. Bench</h3><p>Bench heroes stay owned. You can equip and upgrade them without using an active battle slot.</p></section>
           <section><h3>4. Upgrade</h3><p>Spend mutagens on hero upgrades and credits on gear upgrades. Gear slots are unlimited.</p></section>
           <section><h3>5. Sell</h3><p>Sell units, gear, or 2 mutagens when you need resources. Refunds are useful but lower than the full investment.</p></section>
@@ -835,7 +837,7 @@ function drawHeaderText() {
 }
 
 function drawPlanningPreview() {
-  const previewHeroes = activeUnits().slice(0, 5).map((unit, index) => {
+  const previewHeroes = activeUnits().slice(0, MAX_ACTIVE_UNITS).map((unit, index) => {
     const stats = unitBattleStats(unit);
     return { ...stats, name: unit.name, sprite: unit.sprite, side: "hero", color: unit.color, x: 520 - index * 90, y: 475, baseY: 475, hp: stats.maxHp, maxHp: stats.maxHp, hitFlash: 0, attackFlash: 0 };
   });

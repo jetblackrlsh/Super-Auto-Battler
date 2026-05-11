@@ -35,6 +35,13 @@ Original prompt: Make this project a public git hub repo. I want this to be a st
 - Added persistent Victory/Defeat battle result banners and black outlines for battle-area text.
 - Verification: `node --check app.js`; custom Playwright management flow covering duplicate upgrade, mutagen sale, active reorder, bench/deploy, unit sale, gear buy/upgrade/sell, battle finish banner; web-game client smoke test with no console errors and screenshot review of the Defeat banner.
 
+## 2026-05-10 Team Size Follow-up
+
+- Capped the active battle team at 4 units using `MAX_ACTIVE_UNITS`.
+- Updated deploy gating, auto-active assignment for newly bought units, the shop counter, planning preview, and How to Play copy to use the 4-unit active limit.
+- Kept bench ownership unrestricted so extra units can still be owned, outfitted, and upgraded off the active team.
+- Verification: `node --check app.js`; Chrome DevTools local load confirmed the shop displays `Active 1/4`; custom Playwright cap test confirmed six owned units produce four active units, two benched units with disabled deploy buttons, and battles start with exactly four heroes; web-game client battle smoke produced no console errors and a readable Defeat banner screenshot.
+
 ## TODO
 
-- Commit and push the management follow-up, then verify GitHub Pages updates.
+- No open TODOs for the team-size follow-up.
