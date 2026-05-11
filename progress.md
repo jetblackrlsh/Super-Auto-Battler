@@ -105,6 +105,14 @@ Original prompt: Make this project a public git hub repo. I want this to be a st
 - Updated the action row, gamepad hint, shop copy, How to Play text, and `render_game_to_text()` reroll cost output.
 - Verification: `node --check app.js`; Playwright probe confirmed unit-only reroll preserves gear and costs 1 credit, gear-only reroll preserves units and costs 1 credit, and full reroll costs 2 credits; actual button-click test confirmed credits changed 12 -> 11 -> 10 -> 8; screenshots inspected for readable six-button layout; web-game Playwright smoke test rendered a normal battle with no error artifacts.
 
+## 2026-05-10 Gear Quality and Run Victory Follow-up
+
+- Added gear quality to owned gear. Active battle use lowers equipped gear quality and scales gear modifiers down; unequipped armory gear restores quality after each battle with a larger restoration bonus the longer it rests.
+- Added quality/rest readouts to equipped gear rows, armory gear cards, and `render_game_to_text()`.
+- Added a full-run victory celebration when the player reaches 10 wins: confetti, radiant bursts, Omega City Saved text, and a longer synthesized MIDI-style victory tune.
+- Updated How to Play with gear quality guidance.
+- Verification: `node --check app.js`; Playwright probe confirmed equipped gear quality drops after battle use and effective modifiers decrease, then unequipped gear restores quality after resting; forced 10th-win probe confirmed `runWon: true`, `lastBattleTune: "omega-victory"`, and the celebration overlay; screenshots inspected for the gear quality UI, final victory celebration, and web-game smoke battle with no error artifacts.
+
 ## TODO
 
-- No open TODOs for the split shop rerolls follow-up.
+- No open TODOs for the gear quality and run victory follow-up.

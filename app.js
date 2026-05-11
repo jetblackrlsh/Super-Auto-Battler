@@ -88,6 +88,14 @@ const REROLL_COSTS = {
   gear: 1,
   both: 2,
 };
+const GEAR_QUALITY = {
+  max: 100,
+  min: 25,
+  useLoss: 10,
+  restBase: 12,
+  restBonus: 4,
+  restCap: 28,
+};
 const GRADE_REWARDS = {
   S: { credits: 11, mutagens: 5 },
   A: { credits: 9, mutagens: 4 },
@@ -132,6 +140,7 @@ const state = {
   runLost: false,
   lastBattleGrade: null,
   lastBattleTune: null,
+  celebration: null,
 };
 
 function rand(max) {
@@ -197,6 +206,8 @@ function cloneGear(template) {
     lore: template.lore,
     level: 1,
     investedCredits: template.cost,
+    quality: GEAR_QUALITY.max,
+    restBattles: 0,
     mods: { ...template.mods },
   };
 }
@@ -271,6 +282,53 @@ function playBattleResultTune(won) {
   });
 }
 
+function playRunVictoryTune() {
+  state.lastBattleTune = "omega-victory";
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  const master = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
+  const melody = [60, 64, 67, 72, 79, 76, 84, 88, 91, 96];
+  const bass = [36, 43, 48, 55, 60];
+  filter.type = "highpass";
+  filter.frequency.setValueAtTime(260, now);
+  filter.frequency.exponentialRampToValueAtTime(1200, now + 1.25);
+  master.gain.setValueAtTime(0.0001, now);
+  master.gain.exponentialRampToValueAtTime(0.11, now + 0.04);
+  master.gain.exponentialRampToValueAtTime(0.0001, now + 2.4);
+  filter.connect(master);
+  master.connect(audioCtx.destination);
+  melody.forEach((note, index) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const start = now + index * 0.105;
+    osc.type = index % 3 === 0 ? "square" : "triangle";
+    osc.frequency.setValueAtTime(midiToHz(note), start);
+    osc.frequency.exponentialRampToValueAtTime(midiToHz(note + 12), start + 0.16);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.55, start + 0.018);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.28);
+    osc.connect(gain);
+    gain.connect(filter);
+    osc.start(start);
+    osc.stop(start + 0.32);
+  });
+  bass.forEach((note, index) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const start = now + index * 0.28;
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(midiToHz(note), start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.35, start + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.32);
+    osc.connect(gain);
+    gain.connect(filter);
+    osc.start(start);
+    osc.stop(start + 0.36);
+  });
+}
+
 function playDefeatEffect(unit) {
   if (!audioCtx) return;
   const now = audioCtx.currentTime;
@@ -318,6 +376,7 @@ function resetRun() {
     runLost: false,
     lastBattleGrade: null,
     lastBattleTune: null,
+    celebration: null,
   });
   refreshEnemyPlan();
   rerollShop(true);
@@ -424,11 +483,53 @@ function findGear(id) {
   return { gear: null, owner: null };
 }
 
+function gearQuality(gear) {
+  return Math.max(GEAR_QUALITY.min, Math.min(GEAR_QUALITY.max, gear.quality ?? GEAR_QUALITY.max));
+}
+
+function effectiveMods(gear) {
+  const quality = gearQuality(gear) / GEAR_QUALITY.max;
+  return Object.entries(gear.mods).reduce((mods, [key, value]) => {
+    const scaled = value * quality;
+    mods[key] = key === "speed" ? Number(scaled.toFixed(2)) : Math.max(1, Math.floor(scaled));
+    return mods;
+  }, {});
+}
+
+function qualityText(gear) {
+  return `${Math.round(gearQuality(gear))}% quality`;
+}
+
+function restText(gear) {
+  const battles = gear.restBattles || 0;
+  return battles ? `${battles} rested battle${battles === 1 ? "" : "s"}` : "no rest yet";
+}
+
+function processGearQualityAfterBattle() {
+  const activeIds = new Set(activeUnits().map((unit) => unit.id));
+  state.squad.forEach((unit) => {
+    unit.gear.forEach((gear) => {
+      if (!activeIds.has(unit.id)) {
+        gear.restBattles = 0;
+        return;
+      }
+      gear.quality = Math.max(GEAR_QUALITY.min, gearQuality(gear) - GEAR_QUALITY.useLoss);
+      gear.restBattles = 0;
+    });
+  });
+  state.gear.forEach((gear) => {
+    gear.restBattles = (gear.restBattles || 0) + 1;
+    const restored = Math.min(GEAR_QUALITY.restCap, GEAR_QUALITY.restBase + gear.restBattles * GEAR_QUALITY.restBonus);
+    gear.quality = Math.min(GEAR_QUALITY.max, gearQuality(gear) + restored);
+  });
+}
+
 function equipGear(unitId, gearId = state.selectedGearId) {
   if (!gearId || state.mode !== "planning") return;
   const unit = state.squad.find((candidate) => candidate.id === unitId);
   const gear = gearById(Number(gearId));
   if (!unit || !gear) return;
+  gear.restBattles = 0;
   unit.gear.push(gear);
   state.gear = state.gear.filter((candidate) => candidate.id !== gear.id);
   state.selectedGearId = null;
@@ -443,6 +544,7 @@ function unequipGear(unitId, gearId) {
   const gear = unit.gear.find((candidate) => candidate.id === Number(gearId));
   if (!gear) return;
   unit.gear = unit.gear.filter((candidate) => candidate.id !== gear.id);
+  gear.restBattles = 0;
   state.gear.push(gear);
   log(`${unit.name} unequipped ${gear.name}.`);
   renderAll();
@@ -550,10 +652,11 @@ function unitBattleStats(unit) {
   let armor = unit.armor;
   let speed = unit.speed;
   unit.gear.forEach((gear) => {
-    hp += gear.mods.hp || 0;
-    atk += gear.mods.atk || 0;
-    armor += gear.mods.armor || 0;
-    speed += gear.mods.speed || 0;
+    const mods = effectiveMods(gear);
+    hp += mods.hp || 0;
+    atk += mods.atk || 0;
+    armor += mods.armor || 0;
+    speed += mods.speed || 0;
   });
   if ((counts.Solar || 0) >= 2) atk += 2;
   if ((counts.Velocity || 0) >= 2) speed += 0.14;
@@ -837,6 +940,12 @@ function updateBattle(dt) {
   if (alive(battle.heroes).length === 0) finishBattle(false);
 }
 
+function updateCelebration(dt) {
+  if (!state.celebration) return;
+  state.celebration.ttl = Math.max(0, state.celebration.ttl - dt);
+  if (state.celebration.ttl <= 0) state.celebration = null;
+}
+
 function finishBattle(won) {
   if (!state.battle || state.battle.status !== "fighting") return;
   state.battle.status = won ? "won" : "lost";
@@ -846,6 +955,7 @@ function finishBattle(won) {
   state.credits += creditGain;
   state.mutagens += mutagenGain;
   state.lastBattleGrade = performance.grade;
+  processGearQualityAfterBattle();
   playBattleResultTune(won);
   if (won) state.victories += 1;
   if (!won) state.health -= 1;
@@ -858,8 +968,10 @@ function finishBattle(won) {
   } else if (state.victories >= 10) {
     state.runWon = true;
     state.mode = "planning";
+    state.celebration = { ttl: 6.5, max: 6.5 };
+    state.resultBanner = { ...state.resultBanner, text: "OMEGA CITY SAVED" };
     log("Ten victories won. The supervillain army is broken.");
-    playMidiEffect([72, 76, 79, 84, 88]);
+    playRunVictoryTune();
   } else {
     state.stage = state.victories + 1;
     state.mode = "planning";
@@ -943,7 +1055,7 @@ function teamComparison() {
 
 function gearTotals(unit) {
   return unit.gear.reduce((totals, gear) => {
-    Object.entries(gear.mods).forEach(([key, value]) => {
+    Object.entries(effectiveMods(gear)).forEach(([key, value]) => {
       totals[key] = Number(((totals[key] || 0) + value).toFixed(2));
     });
     return totals;
@@ -1061,7 +1173,7 @@ function gearUpgradeCost(gear) {
 function gearRow(gear, equipped = false, ownerId = null) {
   return `
     <div class="gear-row">
-      <span class="gear-detail">${gear.name} Lv ${gear.level} | ${modText(gear.mods)}</span>
+      <span class="gear-detail">${gear.name} Lv ${gear.level} | ${modText(effectiveMods(gear))} | ${qualityText(gear)}</span>
       <span class="gear-actions">
         <button data-action="upgradeGear" data-gear-id="${gear.id}" ${state.credits < gearUpgradeCost(gear) ? "disabled" : ""}>Upgrade ${gearUpgradeCost(gear)}</button>
         <button data-action="sellGear" data-gear-id="${gear.id}">Sell +${sellValue(gear.investedCredits)}C</button>
@@ -1150,10 +1262,11 @@ function renderPanel() {
       <div class="grid-list">
         ${state.gear.length ? state.gear.map((gear) => `
           <article class="card gear-card">
-            ${portrait(spriteSrc("gear", gear.icon), gear.name)}
+              ${portrait(spriteSrc("gear", gear.icon), gear.name)}
             <div>
               <h3>${gear.name}</h3>
-              <p class="meta">Lv ${gear.level} | ${modText(gear.mods)} | ${gear.trait}</p>
+              <p class="meta">Lv ${gear.level} | ${modText(effectiveMods(gear))} | ${gear.trait}</p>
+              <p class="meta">${qualityText(gear)} | ${restText(gear)}</p>
               <p class="lore">${gear.lore}</p>
               <div class="row-actions">
                 <button data-action="selectGear" data-id="${gear.id}">${state.selectedGearId === gear.id ? "Selected" : "Select"}</button>
@@ -1193,11 +1306,12 @@ function renderPage() {
           <section><h3>1. Build</h3><p>Spend credits on heroes and gear. Reroll recruits or gear separately for 1 credit, or reroll both shops for 2 credits.</p></section>
           <section><h3>2. Line Up</h3><p>Deploy up to 4 active heroes. The first active hero is the frontline and draws fire; the backline gets extra attack.</p></section>
           <section><h3>3. Bench</h3><p>Bench heroes stay owned. You can equip and upgrade them without using an active battle slot.</p></section>
-          <section><h3>4. Upgrade</h3><p>Spend mutagens on hero upgrades and credits on gear upgrades. Gear slots are unlimited.</p></section>
-          <section><h3>5. Sell</h3><p>Sell units, gear, or 2 mutagens when you need resources. Refunds are useful but lower than the full investment.</p></section>
-          <section><h3>6. Scout</h3><p>Threat Intel shows the next enemy team, each enemy's stats, and whether your active lineup has the total stat advantage.</p></section>
-          <section><h3>7. Perform</h3><p>Squad cards track each hero's KOs, falls, and K/D ratio. After each battle, earn a grade from knockouts, survivors, and remaining HP.</p></section>
-          <section><h3>8. Win the Run</h3><p>Win by defeating all enemies. If every active hero falls, lose 1 health. Win 10 battles before health reaches 0.</p></section>
+          <section><h3>4. Gear Quality</h3><p>Equipped gear loses quality when active heroes battle, reducing its bonuses. Unequip gear into the armory to restore more quality each rested battle.</p></section>
+          <section><h3>5. Upgrade</h3><p>Spend mutagens on hero upgrades and credits on gear upgrades. Gear slots are unlimited.</p></section>
+          <section><h3>6. Sell</h3><p>Sell units, gear, or 2 mutagens when you need resources. Refunds are useful but lower than the full investment.</p></section>
+          <section><h3>7. Scout</h3><p>Threat Intel shows the next enemy team, each enemy's stats, and whether your active lineup has the total stat advantage.</p></section>
+          <section><h3>8. Perform</h3><p>Squad cards track each hero's KOs, falls, and K/D ratio. After each battle, earn a grade from knockouts, survivors, and remaining HP.</p></section>
+          <section><h3>9. Win the Run</h3><p>Win by defeating all enemies. If every active hero falls, lose 1 health. Win 10 battles before health reaches 0.</p></section>
         </div>
       </article>
     `;
@@ -1230,6 +1344,7 @@ function renderCanvas() {
   } else {
     drawPlanningPreview();
   }
+  if (state.celebration) drawRunVictoryCelebration();
   if (state.resultBanner) drawResultBanner(state.resultBanner);
 }
 
@@ -1449,6 +1564,68 @@ function drawFloater(floater) {
   ctx.restore();
 }
 
+function drawRunVictoryCelebration() {
+  const celebration = state.celebration;
+  const progress = 1 - celebration.ttl / celebration.max;
+  ctx.save();
+  const glow = ctx.createRadialGradient(640, 340, 80, 640, 340, 720);
+  glow.addColorStop(0, `rgba(255, 245, 115, ${0.42 + Math.sin(progress * 18) * 0.08})`);
+  glow.addColorStop(0.35, "rgba(23, 232, 255, 0.24)");
+  glow.addColorStop(0.72, "rgba(255, 63, 142, 0.2)");
+  glow.addColorStop(1, "rgba(8, 10, 30, 0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  for (let i = 0; i < 36; i += 1) {
+    const angle = i * 0.174 + progress * 2.8;
+    const radius = 90 + ((i * 47 + progress * 840) % 560);
+    const x = 640 + Math.cos(angle) * radius;
+    const y = 360 + Math.sin(angle) * radius * 0.58;
+    const size = 7 + (i % 5) * 3;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle + progress * 8);
+    ctx.fillStyle = ["#fff05b", "#28f0ff", "#ff3f8e", "#7eff70", "#ffffff"][i % 5];
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.shadowBlur = 18;
+    ctx.fillRect(-size / 2, -size / 2, size, size * 1.7);
+    ctx.restore();
+  }
+
+  for (let i = 0; i < 18; i += 1) {
+    const angle = i * 0.349 + progress * 1.4;
+    const inner = 60 + Math.sin(progress * 10 + i) * 18;
+    const outer = 250 + Math.cos(progress * 6 + i) * 40;
+    ctx.strokeStyle = i % 2 ? "rgba(255,240,91,0.72)" : "rgba(40,240,255,0.68)";
+    ctx.lineWidth = 4 + (i % 3);
+    ctx.shadowColor = ctx.strokeStyle;
+    ctx.shadowBlur = 22;
+    ctx.beginPath();
+    ctx.moveTo(640 + Math.cos(angle) * inner, 350 + Math.sin(angle) * inner);
+    ctx.lineTo(640 + Math.cos(angle) * outer, 350 + Math.sin(angle) * outer);
+    ctx.stroke();
+  }
+
+  const scale = 1 + Math.sin(progress * Math.PI * 8) * 0.04;
+  ctx.translate(640, 142);
+  ctx.scale(scale, scale);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#fff";
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = 9;
+  ctx.shadowColor = "#fff05b";
+  ctx.shadowBlur = 28;
+  ctx.font = "900 56px system-ui";
+  ctx.strokeText("OMEGA CITY SAVED!", 0, 0);
+  ctx.fillText("OMEGA CITY SAVED!", 0, 0);
+  ctx.font = "900 24px system-ui";
+  ctx.lineWidth = 6;
+  ctx.shadowColor = "#28f0ff";
+  ctx.strokeText("TEN VICTORIES. THE PORTALS ARE SEALED.", 0, 42);
+  ctx.fillText("TEN VICTORIES. THE PORTALS ARE SEALED.", 0, 42);
+  ctx.restore();
+}
+
 function drawResultBanner(banner) {
   ctx.save();
   const grad = ctx.createLinearGradient(320, 220, 960, 415);
@@ -1602,6 +1779,7 @@ function loop(now) {
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
   updateBattle(dt);
+  updateCelebration(dt);
   renderCanvas();
   pollGamepad();
   requestAnimationFrame(loop);
@@ -1627,7 +1805,7 @@ function renderGameToText() {
       combatRecord: record,
       gearEffects: gearTotals(unit),
       battleStats: { hp: stats.maxHp, atk: stats.atk, armor: stats.armor, speed: Number(stats.speed.toFixed(2)) },
-      gear: unit.gear.map((gear) => ({ id: gear.id, name: gear.name, level: gear.level, mods: gear.mods })),
+      gear: unit.gear.map((gear) => ({ id: gear.id, name: gear.name, level: gear.level, quality: Math.round(gearQuality(gear)), restBattles: gear.restBattles || 0, mods: gear.mods, effectiveMods: effectiveMods(gear) })),
     };
   };
   const comparison = teamComparison();
@@ -1643,6 +1821,7 @@ function renderGameToText() {
     mutagens: state.mutagens,
     lastBattleGrade: state.lastBattleGrade,
     lastBattleTune: state.lastBattleTune,
+    celebration: state.celebration ? { ttl: Number(state.celebration.ttl.toFixed(2)), max: state.celebration.max } : null,
     adaptiveDifficulty: { ...difficulty },
     teamComparison: comparison,
     upcomingEnemies: plannedEnemies().map((enemy) => ({
@@ -1655,7 +1834,7 @@ function renderGameToText() {
     })),
     activeLineup: activeUnits().map(unitSummary),
     bench: benchUnits().map((unit, index) => unitSummary(unit, index)),
-    armory: state.gear.map((gear) => ({ name: gear.name, level: gear.level })),
+    armory: state.gear.map((gear) => ({ name: gear.name, level: gear.level, quality: Math.round(gearQuality(gear)), restBattles: gear.restBattles || 0, mods: gear.mods, effectiveMods: effectiveMods(gear) })),
     shop: {
       units: state.shop.units.map((unit) => unit?.name || null),
       gear: state.shop.gear.map((gear) => gear?.name || null),
@@ -1673,7 +1852,10 @@ function renderGameToText() {
 window.render_game_to_text = renderGameToText;
 window.advanceTime = (ms) => {
   const steps = Math.max(1, Math.round(ms / (1000 / 60)));
-  for (let i = 0; i < steps; i += 1) updateBattle(1 / 60);
+  for (let i = 0; i < steps; i += 1) {
+    updateBattle(1 / 60);
+    updateCelebration(1 / 60);
+  }
   renderAll();
 };
 
