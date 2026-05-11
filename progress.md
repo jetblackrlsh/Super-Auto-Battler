@@ -82,6 +82,15 @@ Original prompt: Make this project a public git hub repo. I want this to be a st
 - Exposed `lastBattleGrade` and `adaptiveDifficulty` in `render_game_to_text()` for verification.
 - Verification: `node --check app.js`; sprite crop contact sheet inspection in `output/asset-crop-audit-cleaned.png`; Playwright screenshot inspection of planning and adaptive battle states with no console errors; S-grade adaptive probe confirmed stage 2 spawned 4 enemies with the `Omega City crisis spike` modifier; web-game Playwright smoke test rendered a normal battle with no error artifacts.
 
+## 2026-05-10 K/D and Threat Intel Follow-up
+
+- Added persistent owned-unit combat records with KOs, falls, and K/D ratio shown on squad cards.
+- Changed planning threat generation to create a concrete upcoming enemy plan that is reused by the canvas preview, side-panel enemy stats, and the next battle.
+- Added a Threat Intel panel showing Hero Power, Enemy Power, advantage value, HP/ATK/ARM/SPD differences, and each upcoming enemy's stats.
+- Updated How to Play with scouting, team comparison, and K/D performance guidance.
+- Expanded `render_game_to_text()` with `teamComparison`, `upcomingEnemies`, and each unit's `combatRecord`.
+- Verification: `node --check app.js`; Playwright state probe confirmed upcoming enemy stats match the battle's actual enemies, forced K/D changed from 0/0 to 1/0 to 1/1, and adding an active hero shifted the advantage value; screenshots inspected for Threat Intel, squad K/D, and advantage-shift states; web-game Playwright smoke test rendered a normal battle with no error artifacts.
+
 ## TODO
 
-- No open TODOs for the crop and adaptive difficulty follow-up.
+- No open TODOs for the K/D and Threat Intel follow-up.

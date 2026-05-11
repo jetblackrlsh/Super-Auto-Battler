@@ -119,6 +119,7 @@ const state = {
   gear: [],
   shop: { units: [], gear: [] },
   selectedGearId: null,
+  enemyPlan: [],
   resultBanner: null,
   battle: null,
   log: [],
@@ -174,6 +175,8 @@ function cloneUnit(template) {
     duplicateCount: 1,
     investedCredits: template.cost,
     investedMutagens: 0,
+    kills: 0,
+    deaths: 0,
     gear: [],
   };
 }
@@ -264,6 +267,7 @@ function resetRun() {
     gear: [],
     shop: { units: [], gear: [] },
     selectedGearId: null,
+    enemyPlan: [],
     resultBanner: null,
     battle: null,
     log: [],
@@ -271,6 +275,7 @@ function resetRun() {
     runLost: false,
     lastBattleGrade: null,
   });
+  refreshEnemyPlan();
   rerollShop(true);
   state.squad.push(cloneUnit(HERO_POOL[0]));
   log("Omega City is breached. Win 10 battles to break the invasion.");
@@ -510,26 +515,83 @@ function unitBattleStats(unit) {
   return { hp, maxHp: hp, atk, armor, speed };
 }
 
+function heroBattleStats(unit, index, lineupLength = activeUnits().length) {
+  const stats = unitBattleStats(unit);
+  const frontlineHp = index === 0 ? 8 : 0;
+  const frontlineArmor = index === 0 ? 3 : 0;
+  const backlineAttack = index >= Math.max(1, lineupLength - 2) ? 2 : 0;
+  return {
+    hp: stats.hp + frontlineHp,
+    maxHp: stats.maxHp + frontlineHp,
+    atk: stats.atk + backlineAttack,
+    armor: stats.armor + frontlineArmor,
+    speed: stats.speed,
+  };
+}
+
 function adaptiveDifficulty() {
   return GRADE_DIFFICULTY[state.lastBattleGrade] || { threat: 0, extraEnemies: 0, label: "first assault" };
 }
 
-function buildEnemies() {
+function refreshEnemyPlan() {
   const adaptive = adaptiveDifficulty();
   const count = Math.min(5, 2 + Math.floor(state.stage / 2) + adaptive.extraEnemies);
+  state.enemyPlan = Array.from({ length: count }, (_, index) => (
+    index === count - 1 && state.stage % 3 === 0 ? 7 : rand(VILLAIN_POOL.length)
+  ));
+}
+
+function ensureEnemyPlan() {
+  if (!state.enemyPlan.length) refreshEnemyPlan();
+}
+
+function enemyStats(template) {
+  const adaptive = adaptiveDifficulty();
   const scale = Math.max(0.75, 1 + (state.stage - 1) * 0.18 + adaptive.threat);
+  const hp = Math.round(template.hp * scale);
+  return {
+    hp,
+    maxHp: hp,
+    atk: Math.round(template.atk * scale),
+    armor: Math.max(0, Math.round(template.armor + state.stage * 0.3 + adaptive.threat * 3)),
+    speed: Math.max(0.45, template.speed + state.stage * 0.018 + adaptive.threat * 0.08),
+  };
+}
+
+function plannedEnemies() {
+  ensureEnemyPlan();
+  return state.enemyPlan.map((templateIndex, index) => {
+    const template = VILLAIN_POOL[templateIndex];
+    return {
+      ...enemyStats(template),
+      name: template.name,
+      templateIndex,
+      sprite: template.sprite,
+      fx: template.fx,
+      color: template.color,
+      midi: template.midi,
+      side: "enemy",
+      x: 760 + index * 105,
+      y: 380 + (index % 2) * 80,
+      baseY: 380 + (index % 2) * 80,
+    };
+  });
+}
+
+function buildEnemies() {
+  const planned = plannedEnemies();
   const enemies = [];
-  for (let i = 0; i < count; i += 1) {
-    const template = i === count - 1 && state.stage % 3 === 0 ? VILLAIN_POOL[7] : pick(VILLAIN_POOL);
+  for (let i = 0; i < planned.length; i += 1) {
+    const template = planned[i];
     enemies.push({
       id: `e${uid++}`,
       name: template.name,
       sprite: template.sprite,
-      maxHp: Math.round(template.hp * scale),
-      hp: Math.round(template.hp * scale),
-      atk: Math.round(template.atk * scale),
-      armor: Math.max(0, Math.round(template.armor + state.stage * 0.3 + adaptive.threat * 3)),
-      speed: Math.max(0.45, template.speed + state.stage * 0.018 + adaptive.threat * 0.08),
+      maxHp: template.maxHp,
+      hp: template.hp,
+      atk: template.atk,
+      armor: template.armor,
+      speed: template.speed,
       side: "enemy",
       fx: template.fx,
       color: template.color,
@@ -551,19 +613,17 @@ function startBattle() {
   const lineup = activeUnits();
   if (state.mode !== "planning" || lineup.length === 0 || state.runLost || state.runWon) return;
   state.resultBanner = null;
+  ensureEnemyPlan();
   const heroes = lineup.map((unit, index) => {
-    const stats = unitBattleStats(unit);
-    const frontlineHp = index === 0 ? 8 : 0;
-    const frontlineArmor = index === 0 ? 3 : 0;
-    const backlineAttack = index >= Math.max(1, lineup.length - 2) ? 2 : 0;
+    const stats = heroBattleStats(unit, index, lineup.length);
     return {
       id: unit.id,
       name: unit.name,
       sprite: unit.sprite,
-      maxHp: stats.maxHp + frontlineHp,
-      hp: stats.hp + frontlineHp,
-      atk: stats.atk + backlineAttack,
-      armor: stats.armor + frontlineArmor,
+      maxHp: stats.maxHp,
+      hp: stats.hp,
+      atk: stats.atk,
+      armor: stats.armor,
       speed: stats.speed,
       side: "hero",
       fx: unit.fx,
@@ -657,6 +717,16 @@ function markDefeated(unit) {
   playDefeatEffect(unit);
 }
 
+function addUnitKill(id) {
+  const unit = state.squad.find((candidate) => candidate.id === id);
+  if (unit) unit.kills += 1;
+}
+
+function addUnitDeath(id) {
+  const unit = state.squad.find((candidate) => candidate.id === id);
+  if (unit) unit.deaths += 1;
+}
+
 function hit(attacker, defender) {
   const wasAlive = defender.hp > 0;
   const damage = Math.max(1, Math.round(attacker.atk - defender.armor * 0.55 + rand(4)));
@@ -677,7 +747,11 @@ function hit(attacker, defender) {
     max: 0.42,
   });
   playMidiEffect(attacker.midi, attacker.color);
-  if (wasAlive && defender.hp <= 0 && !defender.defeated) markDefeated(defender);
+  if (wasAlive && defender.hp <= 0 && !defender.defeated) {
+    markDefeated(defender);
+    if (attacker.side === "hero" && defender.side === "enemy") addUnitKill(attacker.id);
+    if (defender.side === "hero") addUnitDeath(defender.id);
+  }
 }
 
 function updateBattle(dt) {
@@ -738,6 +812,7 @@ function finishBattle(won) {
   } else {
     state.stage = state.victories + 1;
     state.mode = "planning";
+    refreshEnemyPlan();
     rerollShop(true);
   }
   renderAll();
@@ -760,6 +835,59 @@ function spriteSrc(kind, index) {
 
 function portrait(src, alt = "") {
   return `<img class="portrait" src="${src}" alt="${alt}">`;
+}
+
+function emptyTotals() {
+  return { hp: 0, atk: 0, armor: 0, speed: 0, power: 0 };
+}
+
+function addToTotals(totals, stats) {
+  totals.hp += stats.maxHp || stats.hp || 0;
+  totals.atk += stats.atk || 0;
+  totals.armor += stats.armor || 0;
+  totals.speed += stats.speed || 0;
+  totals.power += statPower(stats);
+  return totals;
+}
+
+function statPower(stats) {
+  return Math.round((stats.maxHp || stats.hp || 0) + (stats.atk || 0) * 4 + (stats.armor || 0) * 6 + (stats.speed || 0) * 22);
+}
+
+function roundStat(value) {
+  return Number(value.toFixed(1));
+}
+
+function combatRecord(unit) {
+  const ratio = unit.deaths === 0 ? (unit.kills > 0 ? "Perfect" : "0.00") : (unit.kills / unit.deaths).toFixed(2);
+  return { kills: unit.kills, deaths: unit.deaths, ratio };
+}
+
+function teamTotals() {
+  return activeUnits().reduce((totals, unit, index, lineup) => addToTotals(totals, heroBattleStats(unit, index, lineup.length)), emptyTotals());
+}
+
+function enemyTotals() {
+  return plannedEnemies().reduce((totals, enemy) => addToTotals(totals, enemy), emptyTotals());
+}
+
+function teamComparison() {
+  const heroes = teamTotals();
+  const enemies = enemyTotals();
+  const diff = {
+    hp: heroes.hp - enemies.hp,
+    atk: heroes.atk - enemies.atk,
+    armor: heroes.armor - enemies.armor,
+    speed: roundStat(heroes.speed - enemies.speed),
+    power: heroes.power - enemies.power,
+  };
+  const label = diff.power > 0 ? "Hero advantage" : diff.power < 0 ? "Enemy advantage" : "Even threat";
+  return {
+    heroes: { ...heroes, speed: roundStat(heroes.speed) },
+    enemies: { ...enemies, speed: roundStat(enemies.speed) },
+    diff,
+    label,
+  };
 }
 
 function gearTotals(unit) {
@@ -790,6 +918,7 @@ function unitCard(unit) {
   const creditRefund = sellValue(unit.investedCredits);
   const mutagenRefund = sellValue(unit.investedMutagens);
   const stats = unitBattleStats(unit);
+  const record = combatRecord(unit);
   return `
     <article class="card hero-card">
       ${portrait(spriteSrc("hero", unit.sprite), unit.name)}
@@ -803,6 +932,9 @@ function unitCard(unit) {
           <span class="chip">HP ${unit.maxHp}</span>
           <span class="chip">ATK ${unit.atk}</span>
           <span class="chip">ARM ${unit.armor}</span>
+          <span class="chip">KO ${record.kills}</span>
+          <span class="chip">Falls ${record.deaths}</span>
+          <span class="chip">K/D ${record.ratio}</span>
           <span class="chip">Dupes ${unit.duplicateCount}</span>
           <span class="chip">Gear ${unit.gear.length}</span>
         </div>
@@ -824,6 +956,50 @@ function unitCard(unit) {
         </div>
       </div>
     </article>
+  `;
+}
+
+function statDiffChip(label, value, decimals = 0) {
+  const shown = decimals ? value.toFixed(decimals) : Math.round(value);
+  const signed = value > 0 ? `+${shown}` : shown;
+  const tone = value > 0 ? "good" : value < 0 ? "bad" : "even";
+  return `<span class="stat-diff ${tone}">${label} ${signed}</span>`;
+}
+
+function renderThreatIntel() {
+  const comparison = teamComparison();
+  const enemies = plannedEnemies();
+  return `
+    <section class="threat-intel">
+      <div class="section-title"><span>Threat Intel</span><span>${comparison.label}</span></div>
+      <div class="advantage-card ${comparison.diff.power >= 0 ? "hero-lean" : "enemy-lean"}">
+        <div><span>Hero Power</span><strong>${comparison.heroes.power}</strong></div>
+        <div><span>Enemy Power</span><strong>${comparison.enemies.power}</strong></div>
+        <div><span>Advantage</span><strong>${comparison.diff.power > 0 ? "+" : ""}${comparison.diff.power}</strong></div>
+      </div>
+      <div class="stat-diffs">
+        ${statDiffChip("HP", comparison.diff.hp)}
+        ${statDiffChip("ATK", comparison.diff.atk)}
+        ${statDiffChip("ARM", comparison.diff.armor)}
+        ${statDiffChip("SPD", comparison.diff.speed, 1)}
+      </div>
+      <div class="enemy-roster">
+        ${enemies.map((enemy) => `
+          <article class="enemy-mini-card">
+            ${portrait(spriteSrc("villain", enemy.sprite), enemy.name)}
+            <div>
+              <h3>${enemy.name}</h3>
+              <div class="chips">
+                <span class="chip">HP ${enemy.maxHp}</span>
+                <span class="chip">ATK ${enemy.atk}</span>
+                <span class="chip">ARM ${enemy.armor}</span>
+                <span class="chip">SPD ${enemy.speed.toFixed(2)}</span>
+              </div>
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    </section>
   `;
 }
 
@@ -894,8 +1070,10 @@ function renderPanel() {
     tab.classList.toggle("active", tab.dataset.tab === activeTab);
   });
   const root = document.getElementById("panelContent");
+  const threatIntel = renderThreatIntel();
   if (activeTab === "shop") {
     root.innerHTML = `
+      ${threatIntel}
       <div class="section-title"><span>Recruit</span><span>Active ${activeUnits().length}/${MAX_ACTIVE_UNITS} | Owned ${state.squad.length}</span></div>
       <div class="grid-list">
         ${state.shop.units.map(shopUnitCard).join("")}
@@ -908,6 +1086,7 @@ function renderPanel() {
   } else if (activeTab === "squad") {
     const bonuses = traitBonuses();
     root.innerHTML = `
+      ${threatIntel}
       <div class="section-title"><span>Active Lineup</span><span>${bonuses.length ? bonuses.join(" | ") : "Front unit tanks, back units hit harder"}</span></div>
       <div class="grid-list">${activeUnits().length ? activeUnits().map(unitCard).join("") : `<p class="empty">Deploy at least one hero before battle.</p>`}</div>
       <div class="section-title section-spaced"><span>Bench</span><span>Owned reserves</span></div>
@@ -915,6 +1094,7 @@ function renderPanel() {
     `;
   } else {
     root.innerHTML = `
+      ${threatIntel}
       <div class="section-title"><span>Armory</span><span>${state.selectedGearId ? "Gear selected" : "Pick gear and hero"}</span></div>
       <div class="grid-list">
         ${state.gear.length ? state.gear.map((gear) => `
@@ -964,8 +1144,9 @@ function renderPage() {
           <section><h3>3. Bench</h3><p>Bench heroes stay owned. You can equip and upgrade them without using an active battle slot.</p></section>
           <section><h3>4. Upgrade</h3><p>Spend mutagens on hero upgrades and credits on gear upgrades. Gear slots are unlimited.</p></section>
           <section><h3>5. Sell</h3><p>Sell units, gear, or 2 mutagens when you need resources. Refunds are useful but lower than the full investment.</p></section>
-          <section><h3>6. Grade</h3><p>After each battle, earn a performance grade from enemy knockouts, surviving heroes, and remaining team HP. Higher grades pay more credits and mutagens.</p></section>
-          <section><h3>7. Win the Run</h3><p>Win by defeating all enemies. If every active hero falls, lose 1 health. Win 10 battles before health reaches 0.</p></section>
+          <section><h3>6. Scout</h3><p>Threat Intel shows the next enemy team, each enemy's stats, and whether your active lineup has the total stat advantage.</p></section>
+          <section><h3>7. Perform</h3><p>Squad cards track each hero's KOs, falls, and K/D ratio. After each battle, earn a grade from knockouts, survivors, and remaining HP.</p></section>
+          <section><h3>8. Win the Run</h3><p>Win by defeating all enemies. If every active hero falls, lose 1 health. Win 10 battles before health reaches 0.</p></section>
         </div>
       </article>
     `;
@@ -1025,16 +1206,11 @@ function drawHeaderText() {
 
 function drawPlanningPreview() {
   const previewHeroes = activeUnits().slice(0, MAX_ACTIVE_UNITS).map((unit, index) => {
-    const stats = unitBattleStats(unit);
+    const stats = heroBattleStats(unit, index);
     return { ...stats, name: unit.name, sprite: unit.sprite, side: "hero", color: unit.color, x: 520 - index * 90, y: 475, baseY: 475, hp: stats.maxHp, maxHp: stats.maxHp, hitFlash: 0, attackFlash: 0 };
   });
   previewHeroes.forEach(drawFighter);
-  const scale = 1 + (state.stage - 1) * 0.18;
-  const enemies = Array.from({ length: Math.min(4, 2 + Math.floor(state.stage / 2)) }, (_, index) => {
-    const template = VILLAIN_POOL[(state.stage + index) % VILLAIN_POOL.length];
-    const hp = Math.round(template.hp * scale);
-    return { name: template.name, sprite: template.sprite, side: "enemy", color: template.color, x: 790 + index * 112, y: 475, baseY: 475, hp, maxHp: hp, atk: Math.round(template.atk * scale), armor: Math.round(template.armor + state.stage * 0.3), speed: template.speed, hitFlash: 0, attackFlash: 0 };
-  });
+  const enemies = plannedEnemies().map((enemy, index) => ({ ...enemy, x: 760 + index * 105, y: 475, baseY: 475, hitFlash: 0, attackFlash: 0 }));
   enemies.forEach(drawFighter);
   ctx.save();
   ctx.fillStyle = "rgba(255,255,255,0.92)";
@@ -1390,17 +1566,20 @@ function renderGameToText() {
   } : null;
   const unitSummary = (unit, index) => {
     const stats = unitBattleStats(unit);
+    const record = combatRecord(unit);
     return {
       name: unit.name,
       level: unit.level,
       position: index + 1,
       formation: index === 0 ? "frontline" : index >= Math.max(1, activeUnits().length - 2) ? "backline" : "midline",
       trait: unit.trait,
+      combatRecord: record,
       gearEffects: gearTotals(unit),
       battleStats: { hp: stats.maxHp, atk: stats.atk, armor: stats.armor, speed: Number(stats.speed.toFixed(2)) },
       gear: unit.gear.map((gear) => ({ id: gear.id, name: gear.name, level: gear.level, mods: gear.mods })),
     };
   };
+  const comparison = teamComparison();
   return JSON.stringify({
     note: "Canvas coordinates use origin at top-left; x increases right, y increases down.",
     mode: state.mode,
@@ -1413,6 +1592,15 @@ function renderGameToText() {
     mutagens: state.mutagens,
     lastBattleGrade: state.lastBattleGrade,
     adaptiveDifficulty: { ...difficulty },
+    teamComparison: comparison,
+    upcomingEnemies: plannedEnemies().map((enemy) => ({
+      name: enemy.name,
+      hp: enemy.maxHp,
+      atk: enemy.atk,
+      armor: enemy.armor,
+      speed: Number(enemy.speed.toFixed(2)),
+      power: statPower(enemy),
+    })),
     activeLineup: activeUnits().map(unitSummary),
     bench: benchUnits().map((unit, index) => unitSummary(unit, index)),
     armory: state.gear.map((gear) => ({ name: gear.name, level: gear.level })),
