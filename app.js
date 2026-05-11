@@ -208,6 +208,32 @@ function playMidiEffect(notes, color = "#fff") {
   });
 }
 
+function playDefeatEffect(unit) {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  const baseGain = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
+  const notes = unit.side === "hero" ? [60, 55, 48, 43] : [72, 67, 60, 55];
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(1600, now);
+  filter.frequency.exponentialRampToValueAtTime(260, now + 0.48);
+  baseGain.gain.setValueAtTime(0.0001, now);
+  baseGain.gain.exponentialRampToValueAtTime(0.075, now + 0.025);
+  baseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.62);
+  filter.connect(baseGain);
+  baseGain.connect(audioCtx.destination);
+  notes.forEach((note, index) => {
+    const osc = audioCtx.createOscillator();
+    const start = now + index * 0.055;
+    osc.type = index % 2 ? "sawtooth" : "square";
+    osc.frequency.setValueAtTime(midiToHz(note), start);
+    osc.frequency.exponentialRampToValueAtTime(midiToHz(note - 12), start + 0.28);
+    osc.connect(filter);
+    osc.start(start);
+    osc.stop(start + 0.42);
+  });
+}
+
 function resetRun() {
   uid = 1;
   Object.assign(state, {
@@ -479,6 +505,8 @@ function buildEnemies() {
       baseY: 380 + (i % 2) * 80,
       hitFlash: 0,
       attackFlash: 0,
+      defeatFlash: 0,
+      defeated: false,
     });
   }
   return enemies;
@@ -513,6 +541,8 @@ function startBattle() {
       formation: index === 0 ? "Frontline" : index >= Math.max(1, lineup.length - 2) ? "Backline" : "Midline",
       hitFlash: 0,
       attackFlash: 0,
+      defeatFlash: 0,
+      defeated: false,
     };
   });
   state.battle = { time: 0, status: "fighting", heroes, enemies: buildEnemies(), floaters: [], effects: [] };
@@ -530,7 +560,29 @@ function nearest(source, list) {
   return alive(list).sort((a, b) => Math.abs(a.x - source.x) - Math.abs(b.x - source.x))[0];
 }
 
+function markDefeated(unit) {
+  unit.defeated = true;
+  unit.defeatFlash = 1.25;
+  unit.cooldown = 999;
+  if (state.battle.floaters.length < 18) {
+    state.battle.floaters.push({ text: "DOWN!", x: unit.x, y: unit.y - 104, ttl: 1.05, side: unit.side });
+  }
+  state.battle.effects.push({
+    type: "defeat",
+    color: unit.side === "hero" ? "#28f0ff" : "#ff4b8b",
+    fromX: unit.x,
+    fromY: unit.y - 56,
+    toX: unit.x,
+    toY: unit.y - 48,
+    ttl: 1.0,
+    max: 1.0,
+    side: unit.side,
+  });
+  playDefeatEffect(unit);
+}
+
 function hit(attacker, defender) {
+  const wasAlive = defender.hp > 0;
   const damage = Math.max(1, Math.round(attacker.atk - defender.armor * 0.55 + rand(4)));
   defender.hp = Math.max(0, defender.hp - damage);
   defender.hitFlash = 0.24;
@@ -549,6 +601,7 @@ function hit(attacker, defender) {
     max: 0.42,
   });
   playMidiEffect(attacker.midi, attacker.color);
+  if (wasAlive && defender.hp <= 0 && !defender.defeated) markDefeated(defender);
 }
 
 function updateBattle(dt) {
@@ -557,10 +610,11 @@ function updateBattle(dt) {
   battle.time += dt;
   const all = [...battle.heroes, ...battle.enemies];
   all.forEach((unit) => {
-    if (unit.hp <= 0) return;
     unit.cooldown -= dt * unit.speed;
     unit.hitFlash = Math.max(0, unit.hitFlash - dt);
     unit.attackFlash = Math.max(0, unit.attackFlash - dt);
+    unit.defeatFlash = Math.max(0, unit.defeatFlash - dt);
+    if (unit.hp <= 0) return;
     unit.y = unit.baseY + Math.sin(battle.time * (5.5 + unit.speed) + unit.id) * 5;
     if (unit.cooldown <= 0) {
       const target = unit.side === "hero" ? nearest(unit, battle.enemies) : nearest(unit, battle.heroes);
@@ -810,7 +864,7 @@ function renderCanvas() {
   ctx.fillStyle = grd;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   drawHeaderText();
-  if (state.mode === "battle" && state.battle) {
+  if (state.battle && (state.mode === "battle" || state.resultBanner)) {
     state.battle.effects.forEach(drawEffect);
     [...state.battle.heroes, ...state.battle.enemies].forEach(drawFighter);
     state.battle.floaters.forEach(drawFloater);
@@ -869,8 +923,14 @@ function drawFighter(unit) {
   const h = unit.side === "hero" ? 178 : 164;
   const pulse = unit.hitFlash > 0 ? 16 : 0;
   const lunge = unit.attackFlash > 0 ? (unit.side === "hero" ? 18 : -18) : 0;
+  const defeated = unit.defeated || unit.hp <= 0;
+  const fall = defeated ? 16 : 0;
   ctx.save();
-  ctx.translate(unit.x + lunge, unit.y);
+  ctx.translate(unit.x + lunge, unit.y + fall);
+  if (defeated) {
+    ctx.globalAlpha = 0.46 + unit.defeatFlash * 0.18;
+    ctx.rotate(unit.side === "hero" ? -0.08 : 0.08);
+  }
   ctx.fillStyle = unit.side === "hero" ? "rgba(23,200,255,0.34)" : "rgba(255,63,142,0.34)";
   ctx.beginPath();
   ctx.ellipse(0, 72, 58 + pulse, 16 + pulse / 3, 0, 0, Math.PI * 2);
@@ -880,6 +940,7 @@ function drawFighter(unit) {
   ctx.scale(scale, 1);
   if (img?.complete) ctx.drawImage(img, -w / 2, -h / 2, w, h);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
   drawHealth(unit.x - 45 + lunge, unit.y - 105, 90, unit.hp / unit.maxHp, unit.side);
   ctx.fillStyle = "rgba(255,255,255,0.98)";
   ctx.strokeStyle = "#000";
@@ -888,6 +949,39 @@ function drawFighter(unit) {
   ctx.textAlign = "center";
   ctx.strokeText(unit.name, unit.x + lunge, unit.y + 108, 112);
   ctx.fillText(unit.name, unit.x + lunge, unit.y + 108, 112);
+  if (defeated) drawDefeatMarker(unit.x + lunge, unit.y - 28, unit.side, unit.color, unit.defeatFlash);
+  ctx.restore();
+}
+
+function drawDefeatMarker(x, y, side, color, flash) {
+  const badgeColor = side === "hero" ? "#28f0ff" : "#ff4b8b";
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-0.08);
+  ctx.fillStyle = "rgba(10, 12, 28, 0.9)";
+  ctx.strokeStyle = color || badgeColor;
+  ctx.shadowColor = badgeColor;
+  ctx.shadowBlur = 12 + flash * 18;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.roundRect(-52, -18, 104, 36, 10);
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "#000";
+  ctx.fillStyle = "#fff";
+  ctx.font = "900 24px system-ui";
+  ctx.textAlign = "center";
+  ctx.strokeText("DOWN", 0, 8);
+  ctx.fillText("DOWN", 0, 8);
+  ctx.strokeStyle = badgeColor;
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(-36, 34);
+  ctx.lineTo(36, 86);
+  ctx.moveTo(36, 34);
+  ctx.lineTo(-36, 86);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -914,7 +1008,29 @@ function drawEffect(effect) {
   ctx.shadowColor = effect.color;
   ctx.shadowBlur = 20;
   ctx.lineWidth = 6;
-  if (effect.type === "laser") {
+  if (effect.type === "defeat") {
+    const radius = 26 + p * 96;
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.arc(effect.toX, effect.toY + 16, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.lineWidth = 9;
+    ctx.strokeStyle = effect.side === "hero" ? "#28f0ff" : "#ff4b8b";
+    ctx.beginPath();
+    ctx.moveTo(effect.toX - 42 - p * 18, effect.toY - 8 - p * 20);
+    ctx.lineTo(effect.toX + 42 + p * 18, effect.toY + 62 + p * 20);
+    ctx.moveTo(effect.toX + 42 + p * 18, effect.toY - 8 - p * 20);
+    ctx.lineTo(effect.toX - 42 - p * 18, effect.toY + 62 + p * 20);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#fff";
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 5;
+    ctx.font = "900 34px system-ui";
+    ctx.textAlign = "center";
+    ctx.strokeText("K.O.", effect.toX, effect.toY - 42);
+    ctx.fillText("K.O.", effect.toX, effect.toY - 42);
+  } else if (effect.type === "laser") {
     ctx.beginPath();
     ctx.moveTo(effect.fromX, effect.fromY);
     ctx.lineTo(effect.toX, effect.toY);
@@ -1120,8 +1236,9 @@ function loop(now) {
 function renderGameToText() {
   const battle = state.battle ? {
     status: state.battle.status,
-    heroes: state.battle.heroes.map(({ name, hp, maxHp, atk, armor, x, y }) => ({ name, hp: Math.round(hp), maxHp, atk, armor, x: Math.round(x), y: Math.round(y) })),
-    enemies: state.battle.enemies.map(({ name, hp, maxHp, atk, armor, x, y }) => ({ name, hp: Math.round(hp), maxHp, atk, armor, x: Math.round(x), y: Math.round(y) })),
+    heroes: state.battle.heroes.map(({ name, hp, maxHp, atk, armor, x, y, defeated }) => ({ name, hp: Math.round(hp), maxHp, atk, armor, defeated: !!defeated, x: Math.round(x), y: Math.round(y) })),
+    enemies: state.battle.enemies.map(({ name, hp, maxHp, atk, armor, x, y, defeated }) => ({ name, hp: Math.round(hp), maxHp, atk, armor, defeated: !!defeated, x: Math.round(x), y: Math.round(y) })),
+    activeEffects: state.battle.effects.map(({ type, side }) => ({ type, side: side || null })),
   } : null;
   return JSON.stringify({
     note: "Canvas coordinates use origin at top-left; x increases right, y increases down.",

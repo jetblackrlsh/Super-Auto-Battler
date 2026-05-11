@@ -42,6 +42,13 @@ Original prompt: Make this project a public git hub repo. I want this to be a st
 - Kept bench ownership unrestricted so extra units can still be owned, outfitted, and upgraded off the active team.
 - Verification: `node --check app.js`; Chrome DevTools local load confirmed the shop displays `Active 1/4`; custom Playwright cap test confirmed six owned units produce four active units, two benched units with disabled deploy buttons, and battles start with exactly four heroes; web-game client battle smoke produced no console errors and a readable Defeat banner screenshot.
 
+## 2026-05-10 Defeat Effect Follow-up
+
+- Added one-time defeated state for battle fighters when a hit drops them to 0 HP.
+- Added a flashy K.O./DOWN visual treatment, cross-out marker, expanding defeat burst, and descending synthesized MIDI-style defeat sound.
+- Kept the final battle scene visible behind Victory/Defeat banners so the last defeated character remains readable instead of immediately swapping back to the planning preview.
+- Verification: `node --check app.js`; deterministic Playwright scenarios forced enemy and hero defeats, confirmed `defeated: true` and active `defeat` effects in `render_game_to_text()`, captured and inspected both screenshots, and reported no console errors; web-game Playwright client smoke test rendered a normal battle state with no error artifacts.
+
 ## TODO
 
-- No open TODOs for the team-size follow-up.
+- No open TODOs for the defeat effect follow-up.
