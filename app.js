@@ -83,6 +83,11 @@ const GEAR_POOL = [
 ];
 
 const MAX_ACTIVE_UNITS = 4;
+const REROLL_COSTS = {
+  units: 1,
+  gear: 1,
+  both: 2,
+};
 const GRADE_REWARDS = {
   S: { credits: 11, mutagens: 5 },
   A: { credits: 9, mutagens: 4 },
@@ -321,14 +326,20 @@ function resetRun() {
   renderAll();
 }
 
-function rerollShop(free = false) {
-  if (!free) {
-    if (state.mode !== "planning" || state.credits < 2) return;
-    state.credits -= 2;
-    log("Shop rerolled for 2 credits.");
+function rerollShop(kind = "both", free = false) {
+  if (typeof kind === "boolean") {
+    free = kind;
+    kind = "both";
   }
-  state.shop.units = Array.from({ length: 3 }, () => pick(HERO_POOL));
-  state.shop.gear = Array.from({ length: 3 }, () => pick(GEAR_POOL));
+  const cost = REROLL_COSTS[kind] || REROLL_COSTS.both;
+  if (!free) {
+    if (state.mode !== "planning" || state.credits < cost) return;
+    state.credits -= cost;
+    const label = kind === "units" ? "Recruit shop" : kind === "gear" ? "Gear shop" : "Full shop";
+    log(`${label} rerolled for ${cost} credit${cost === 1 ? "" : "s"}.`);
+  }
+  if (kind === "units" || kind === "both") state.shop.units = Array.from({ length: 3 }, () => pick(HERO_POOL));
+  if (kind === "gear" || kind === "both") state.shop.gear = Array.from({ length: 3 }, () => pick(GEAR_POOL));
   renderAll();
 }
 
@@ -1067,7 +1078,7 @@ function emptyShopCard(kind) {
       <div>
         <h3>Sold Out</h3>
         <p class="meta">${kind} slot empty</p>
-        <p class="lore">Reroll the shop or finish a battle to refill this slot.</p>
+        <p class="lore">Reroll this shop, reroll both shops, or finish a battle to refill this slot.</p>
       </div>
     </article>
   `;
@@ -1118,7 +1129,7 @@ function renderPanel() {
       <div class="grid-list">
         ${state.shop.units.map(shopUnitCard).join("")}
       </div>
-      <div class="section-title section-spaced"><span>Gear</span><span>Reroll 2 credits</span></div>
+      <div class="section-title section-spaced"><span>Gear</span><span>Reroll units ${REROLL_COSTS.units}C | gear ${REROLL_COSTS.gear}C | both ${REROLL_COSTS.both}C</span></div>
       <div class="grid-list">
         ${state.shop.gear.map(shopGearCard).join("")}
       </div>
@@ -1179,7 +1190,7 @@ function renderPage() {
       <article class="info-card">
         <h2>How to Play</h2>
         <div class="info-grid">
-          <section><h3>1. Build</h3><p>Spend credits on heroes and gear. Buying a duplicate hero merges it into your owned copy as a free level upgrade.</p></section>
+          <section><h3>1. Build</h3><p>Spend credits on heroes and gear. Reroll recruits or gear separately for 1 credit, or reroll both shops for 2 credits.</p></section>
           <section><h3>2. Line Up</h3><p>Deploy up to 4 active heroes. The first active hero is the frontline and draws fire; the backline gets extra attack.</p></section>
           <section><h3>3. Bench</h3><p>Bench heroes stay owned. You can equip and upgrade them without using an active battle slot.</p></section>
           <section><h3>4. Upgrade</h3><p>Spend mutagens on hero upgrades and credits on gear upgrades. Gear slots are unlimited.</p></section>
@@ -1504,7 +1515,7 @@ function handleAction(target) {
   if (!action) return;
   ensureAudio();
   if (action === "startBattle") startBattle();
-  if (action === "rerollShop") rerollShop(false);
+  if (action === "rerollShop") rerollShop(target.dataset.kind || "both", false);
   if (action === "sellMutagens") sellMutagens();
   if (action === "newRun") resetRun();
   if (action === "buyUnit") buyUnit(Number(target.dataset.index));
@@ -1571,7 +1582,7 @@ function pollGamepad() {
     }
     if ((pressed(2) && !gamepadLock.x)) {
       ensureAudio();
-      rerollShop(false);
+      rerollShop("both", false);
     }
     if ((pressed(3) && !gamepadLock.y)) {
       ensureAudio();
@@ -1648,6 +1659,7 @@ function renderGameToText() {
     shop: {
       units: state.shop.units.map((unit) => unit?.name || null),
       gear: state.shop.gear.map((gear) => gear?.name || null),
+      rerollCosts: { ...REROLL_COSTS },
     },
     selectedGear: gearById(state.selectedGearId)?.name || null,
     resultBanner: state.resultBanner?.text || null,

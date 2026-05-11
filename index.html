@@ -31,7 +31,9 @@
           <canvas id="battleCanvas" width="1280" height="720" aria-label="Battlefield"></canvas>
           <div class="battle-actions">
             <button class="primary" data-action="startBattle">Start Battle</button>
-            <button data-action="rerollShop">Reroll Shop</button>
+            <button data-action="rerollShop" data-kind="units">Reroll Units 1C</button>
+            <button data-action="rerollShop" data-kind="gear">Reroll Gear 1C</button>
+            <button data-action="rerollShop" data-kind="both">Reroll Both 2C</button>
             <button data-action="sellMutagens">Sell Mutagens</button>
             <button data-action="newRun">New Run</button>
           </div>
@@ -50,7 +52,7 @@
       <section class="log-panel" aria-label="Battle log">
         <div class="section-title">
           <span>War Room</span>
-          <span id="focusHint">Gamepad: D-pad move, A select, X reroll, Y battle</span>
+          <span id="focusHint">Gamepad: D-pad move, A select, X reroll both, Y battle</span>
         </div>
         <ol id="eventLog"></ol>
       </section>

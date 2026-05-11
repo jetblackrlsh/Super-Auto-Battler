@@ -98,6 +98,13 @@ Original prompt: Make this project a public git hub repo. I want this to be a st
 - Added `lastBattleTune` to `render_game_to_text()` so result-audio paths can be verified.
 - Verification: `node --check app.js`; targeted Playwright browser probe forced both battle-end paths and confirmed `lastBattleTune: "victory"` and `lastBattleTune: "defeat"` with a running `AudioContext` and no console errors; web-game Playwright smoke test rendered a normal battle with no error artifacts.
 
+## 2026-05-10 Split Shop Rerolls Follow-up
+
+- Replaced the single paid shop reroll with three choices: reroll recruits for 1 credit, reroll gear for 1 credit, or reroll both shops for 2 credits.
+- Kept free new-run and post-battle shop refills as full rerolls.
+- Updated the action row, gamepad hint, shop copy, How to Play text, and `render_game_to_text()` reroll cost output.
+- Verification: `node --check app.js`; Playwright probe confirmed unit-only reroll preserves gear and costs 1 credit, gear-only reroll preserves units and costs 1 credit, and full reroll costs 2 credits; actual button-click test confirmed credits changed 12 -> 11 -> 10 -> 8; screenshots inspected for readable six-button layout; web-game Playwright smoke test rendered a normal battle with no error artifacts.
+
 ## TODO
 
-- No open TODOs for the battle result tunes follow-up.
+- No open TODOs for the split shop rerolls follow-up.
