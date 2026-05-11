@@ -157,6 +157,14 @@ Original prompt: Make this project a public git hub repo. I want this to be a st
 - Updated How to Play with the new loss-scaling rule.
 - Verification: `node --check app.js`; targeted Playwright probe confirmed a previous -80 enemy advantage reset to -5 after defeat and stayed -5 after upgrading the hero; follow-up probe confirmed the loss label `villains hold a slight +5 edge`; web-game client smoke started a battle through the keyboard focus path and rendered normally with no error artifacts.
 
+## 2026-05-10 Live Advantage Display Follow-up
+
+- Changed upcoming enemy waves from render-time recalculation to a locked stat snapshot created when the wave is generated.
+- Threat Intel now compares the player's live active lineup against that fixed upcoming wave, so upgrading heroes, equipping gear, benching, deploying, and reordering units can visibly change the Advantage value while planning.
+- Added a `Wave Target` readout beside Hero Power, Enemy Power, and Advantage so the difficulty target remains clear without freezing the live advantage display.
+- Updated How to Play scouting text to explain that Threat Intel locks the next enemy wave and compares the live lineup against it.
+- Verification: `node --check app.js`; targeted Playwright probe confirmed a hero upgrade changed advantage from -52 to -26 and equipping gear changed it to -2 while upcoming enemy power stayed fixed; battle-start probe confirmed the battle enemy power matched the preview; loss-target probe confirmed a -5 loss wave became +21 after an upgrade while enemies stayed fixed; web-game client smoke and full-page screenshot inspection confirmed the UI rendered normally.
+
 ## TODO
 
-- No open TODOs for the loss difficulty follow-up.
+- No open TODOs for the live advantage display follow-up.

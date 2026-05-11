@@ -152,6 +152,7 @@ const state = {
   shop: { units: [], gear: [] },
   selectedGearId: null,
   enemyPlan: [],
+  enemyPlanSnapshot: [],
   resultBanner: null,
   battle: null,
   log: [],
@@ -391,6 +392,7 @@ function resetRun() {
     shop: { units: [], gear: [] },
     selectedGearId: null,
     enemyPlan: [],
+    enemyPlanSnapshot: [],
     resultBanner: null,
     battle: null,
     log: [],
@@ -403,9 +405,9 @@ function resetRun() {
     enemyAdvantageTarget: 0,
     celebration: null,
   });
+  state.squad.push(cloneUnit(HERO_POOL[0]));
   refreshEnemyPlan();
   rerollShop(true);
-  state.squad.push(cloneUnit(HERO_POOL[0]));
   log("Omega City is breached. Win 10 battles to break the invasion.");
   renderAll();
 }
@@ -756,10 +758,12 @@ function refreshEnemyPlan() {
   state.enemyPlan = Array.from({ length: count }, (_, index) => (
     index === count - 1 && state.stage % 3 === 0 ? 7 : rand(VILLAIN_POOL.length)
   ));
+  state.enemyPlanSnapshot = scaleEnemyPlanToAdvantage(basePlannedEnemies());
 }
 
 function ensureEnemyPlan() {
   if (!state.enemyPlan.length) refreshEnemyPlan();
+  if (!state.enemyPlanSnapshot.length) state.enemyPlanSnapshot = scaleEnemyPlanToAdvantage(basePlannedEnemies());
 }
 
 function baseEnemyStats(template) {
@@ -828,8 +832,7 @@ function scaleEnemyPlanToAdvantage(enemies) {
   return scaled;
 }
 
-function plannedEnemies() {
-  ensureEnemyPlan();
+function basePlannedEnemies() {
   const enemies = state.enemyPlan.map((templateIndex, index) => {
     const template = VILLAIN_POOL[templateIndex];
     return {
@@ -846,7 +849,12 @@ function plannedEnemies() {
       baseY: 380 + (index % 2) * 80,
     };
   });
-  return scaleEnemyPlanToAdvantage(enemies);
+  return enemies;
+}
+
+function plannedEnemies() {
+  ensureEnemyPlan();
+  return state.enemyPlanSnapshot.map((enemy) => ({ ...enemy }));
 }
 
 function buildEnemies() {
@@ -1343,6 +1351,7 @@ function statDiffChip(label, value, decimals = 0) {
 
 function renderThreatIntel() {
   const comparison = teamComparison();
+  const difficulty = adaptiveDifficulty();
   const enemies = plannedEnemies();
   return `
     <section class="threat-intel">
@@ -1351,6 +1360,7 @@ function renderThreatIntel() {
         <div><span>Hero Power</span><strong>${comparison.heroes.power}</strong></div>
         <div><span>Enemy Power</span><strong>${comparison.enemies.power}</strong></div>
         <div><span>Advantage</span><strong>${comparison.diff.power > 0 ? "+" : ""}${comparison.diff.power}</strong></div>
+        <div><span>Wave Target</span><strong>${difficulty.targetEnemyAdvantage ? `Enemy +${difficulty.targetEnemyAdvantage}` : "Stage Base"}</strong></div>
       </div>
       <div class="stat-diffs">
         ${statDiffChip("HP", comparison.diff.hp)}
@@ -1528,7 +1538,7 @@ function renderPage() {
           <section><h3>6. Roles</h3><p>Roles define combat jobs: Tanks guard, Bruisers want the front, Strikers finish wounded enemies, Snipers pierce armor, Medics heal, Supports buff the team, and Brawlers rage when hurt.</p></section>
           <section><h3>7. Upgrade</h3><p>Spend mutagens on hero upgrades and credits on gear upgrades. Gear slots are unlimited.</p></section>
           <section><h3>8. Sell</h3><p>Sell units, gear, or trade ${MUTAGEN_SALE.cost} mutagens for ${MUTAGEN_SALE.credits} credits when you need resources. Refunds are useful but lower than the full investment.</p></section>
-          <section><h3>9. Scout</h3><p>Threat Intel shows the next enemy team, each enemy's stats, and whether your active lineup has the total stat advantage.</p></section>
+          <section><h3>9. Scout</h3><p>Threat Intel locks the next enemy wave when it appears, then compares your live active lineup against it as you upgrade, equip, bench, and reorder heroes.</p></section>
           <section><h3>10. Difficulty</h3><p>After a win, the next wave scales above your Hero Power by your last winning edge. After a loss, enemies reset to near-par with only a slight advantage.</p></section>
           <section><h3>11. Perform</h3><p>Squad cards track each hero's K/D as kills / deaths. After each battle, earn a grade from knockouts, survivors, and remaining HP.</p></section>
           <section><h3>12. Win the Run</h3><p>Win by defeating all enemies. If every active hero falls, lose 1 health. Win 10 battles before health reaches 0.</p></section>
