@@ -57,6 +57,14 @@ Original prompt: Make this project a public git hub repo. I want this to be a st
 - Updated the Victory/Defeat banner to show the grade, rewards, and scoring metrics, and added grading instructions to How to Play.
 - Verification: `node --check app.js`; deterministic Playwright scenarios forced an S-grade victory and F-grade defeat, confirmed grade metrics and rewards through `render_game_to_text()`, captured and inspected both result screenshots, and reported no console errors; web-game Playwright client smoke test rendered a normal active battle with no error artifacts.
 
+## 2026-05-10 Gear Visibility Follow-up
+
+- Added a Gear Effects summary to each squad unit card showing total equipped gear bonuses and resulting battle stats.
+- Added per-item equipped gear rows with readable modifiers plus Upgrade, Sell, and Unequip controls.
+- Added unequip behavior that removes gear from the unit and returns it to the armory without selling or destroying it.
+- Expanded `render_game_to_text()` unit summaries with `gearEffects`, detailed equipped gear, and battle stats for easier verification.
+- Verification: `node --check app.js`; deterministic Playwright flow bought gear, equipped it, confirmed the summary/modifier text and Unequip button, unequipped the gear, confirmed the unit gear count returned to 0 and armory count returned to 1, inspected before/after screenshots, and found no console errors; web-game Playwright smoke test rendered a normal battle with no error artifacts.
+
 ## TODO
 
-- No open TODOs for the battle grade follow-up.
+- No open TODOs for the gear visibility follow-up.

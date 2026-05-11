@@ -371,6 +371,18 @@ function equipGear(unitId, gearId = state.selectedGearId) {
   renderAll();
 }
 
+function unequipGear(unitId, gearId) {
+  if (state.mode !== "planning") return;
+  const unit = state.squad.find((candidate) => candidate.id === unitId);
+  if (!unit) return;
+  const gear = unit.gear.find((candidate) => candidate.id === Number(gearId));
+  if (!gear) return;
+  unit.gear = unit.gear.filter((candidate) => candidate.id !== gear.id);
+  state.gear.push(gear);
+  log(`${unit.name} unequipped ${gear.name}.`);
+  renderAll();
+}
+
 function upgradeGear(gearId) {
   if (state.mode !== "planning") return;
   const { gear } = findGear(gearId);
@@ -734,6 +746,25 @@ function portrait(src, alt = "") {
   return `<img class="portrait" src="${src}" alt="${alt}">`;
 }
 
+function gearTotals(unit) {
+  return unit.gear.reduce((totals, gear) => {
+    Object.entries(gear.mods).forEach(([key, value]) => {
+      totals[key] = Number(((totals[key] || 0) + value).toFixed(2));
+    });
+    return totals;
+  }, {});
+}
+
+function gearEffectSummary(unit) {
+  if (!unit.gear.length) return "No equipped gear bonuses";
+  return modText(gearTotals(unit));
+}
+
+function equippedGearRows(unit) {
+  if (!unit.gear.length) return `<p>No gear equipped</p>`;
+  return unit.gear.map((gear) => gearRow(gear, true, unit.id)).join("");
+}
+
 function unitCard(unit) {
   const upgradeCost = unit.level * 3;
   const selectedGear = gearById(state.selectedGearId);
@@ -742,6 +773,7 @@ function unitCard(unit) {
   const canDeploy = !isActive && activeUnits().length < MAX_ACTIVE_UNITS;
   const creditRefund = sellValue(unit.investedCredits);
   const mutagenRefund = sellValue(unit.investedMutagens);
+  const stats = unitBattleStats(unit);
   return `
     <article class="card hero-card">
       ${portrait(spriteSrc("hero", unit.sprite), unit.name)}
@@ -758,8 +790,13 @@ function unitCard(unit) {
           <span class="chip">Dupes ${unit.duplicateCount}</span>
           <span class="chip">Gear ${unit.gear.length}</span>
         </div>
+        <div class="gear-summary">
+          <strong>Gear effects</strong>
+          <span>${gearEffectSummary(unit)}</span>
+          <span>Battle stats: HP ${stats.maxHp}, ATK ${stats.atk}, ARM ${stats.armor}, SPD ${stats.speed.toFixed(2)}</span>
+        </div>
         <div class="loadout">
-          ${unit.gear.length ? unit.gear.map((gear) => gearRow(gear, true)).join("") : `<p>No gear equipped</p>`}
+          ${equippedGearRows(unit)}
         </div>
         <div class="row-actions">
           <button data-action="moveUnit" data-id="${unit.id}" data-direction="-1" ${!isActive || position <= 0 ? "disabled" : ""}>Forward</button>
@@ -778,13 +815,15 @@ function gearUpgradeCost(gear) {
   return gear.level + 2;
 }
 
-function gearRow(gear, equipped = false) {
+function gearRow(gear, equipped = false, ownerId = null) {
   return `
     <div class="gear-row">
-      <span>${gear.name} Lv ${gear.level} | ${modText(gear.mods)}</span>
-      <button data-action="upgradeGear" data-gear-id="${gear.id}" ${state.credits < gearUpgradeCost(gear) ? "disabled" : ""}>Upgrade ${gearUpgradeCost(gear)}</button>
-      <button data-action="sellGear" data-gear-id="${gear.id}">Sell +${sellValue(gear.investedCredits)}C</button>
-      ${equipped ? "" : ""}
+      <span class="gear-detail">${gear.name} Lv ${gear.level} | ${modText(gear.mods)}</span>
+      <span class="gear-actions">
+        <button data-action="upgradeGear" data-gear-id="${gear.id}" ${state.credits < gearUpgradeCost(gear) ? "disabled" : ""}>Upgrade ${gearUpgradeCost(gear)}</button>
+        <button data-action="sellGear" data-gear-id="${gear.id}">Sell +${sellValue(gear.investedCredits)}C</button>
+        ${equipped ? `<button data-action="unequipGear" data-id="${ownerId}" data-gear-id="${gear.id}">Unequip</button>` : ""}
+      </span>
     </div>
   `;
 }
@@ -1218,6 +1257,7 @@ function handleAction(target) {
   if (action === "selectGear") selectGear(Number(target.dataset.id));
   if (action === "equipGear") equipGear(Number(target.dataset.id));
   if (action === "equipGearDirect") equipGear(Number(target.dataset.id), Number(target.dataset.gearId));
+  if (action === "unequipGear") unequipGear(Number(target.dataset.id), Number(target.dataset.gearId));
 }
 
 document.addEventListener("click", (event) => {
@@ -1302,6 +1342,19 @@ function renderGameToText() {
     enemies: state.battle.enemies.map(({ name, hp, maxHp, atk, armor, x, y, defeated }) => ({ name, hp: Math.round(hp), maxHp, atk, armor, defeated: !!defeated, x: Math.round(x), y: Math.round(y) })),
     activeEffects: state.battle.effects.map(({ type, side }) => ({ type, side: side || null })),
   } : null;
+  const unitSummary = (unit, index) => {
+    const stats = unitBattleStats(unit);
+    return {
+      name: unit.name,
+      level: unit.level,
+      position: index + 1,
+      formation: index === 0 ? "frontline" : index >= Math.max(1, activeUnits().length - 2) ? "backline" : "midline",
+      trait: unit.trait,
+      gearEffects: gearTotals(unit),
+      battleStats: { hp: stats.maxHp, atk: stats.atk, armor: stats.armor, speed: Number(stats.speed.toFixed(2)) },
+      gear: unit.gear.map((gear) => ({ id: gear.id, name: gear.name, level: gear.level, mods: gear.mods })),
+    };
+  };
   return JSON.stringify({
     note: "Canvas coordinates use origin at top-left; x increases right, y increases down.",
     mode: state.mode,
@@ -1312,8 +1365,8 @@ function renderGameToText() {
     stage: state.stage,
     credits: state.credits,
     mutagens: state.mutagens,
-    activeLineup: activeUnits().map((unit, index) => ({ name: unit.name, level: unit.level, position: index + 1, formation: index === 0 ? "frontline" : index >= Math.max(1, activeUnits().length - 2) ? "backline" : "midline", trait: unit.trait, gear: unit.gear.map((gear) => `${gear.name} Lv ${gear.level}`) })),
-    bench: benchUnits().map((unit) => ({ name: unit.name, level: unit.level, trait: unit.trait, gear: unit.gear.map((gear) => `${gear.name} Lv ${gear.level}`) })),
+    activeLineup: activeUnits().map(unitSummary),
+    bench: benchUnits().map((unit, index) => unitSummary(unit, index)),
     armory: state.gear.map((gear) => ({ name: gear.name, level: gear.level })),
     shop: {
       units: state.shop.units.map((unit) => unit.name),
