@@ -149,6 +149,14 @@ Original prompt: Make this project a public git hub repo. I want this to be a st
 - Updated How to Play with the new Difficulty rule.
 - Verification: `node --check app.js`; targeted Playwright probe confirmed a +29 winning advantage produced a next-wave -29 Threat Intel advantage, then increasing hero power caused enemy power to rise and preserve the -29 target; screenshots inspected for Threat Intel and How to Play; web-game client smoke started a battle through the keyboard focus path and rendered normally with no error artifacts.
 
+## 2026-05-10 Loss Difficulty Follow-up
+
+- Changed defeat recovery scaling so a loss no longer halves a potentially large enemy advantage target.
+- After a loss, the next enemy wave now targets a slight enemy power edge over the current team: 3% of Hero Power, clamped between 5 and 20 power.
+- Added `lastBattleWon` to `render_game_to_text()` and updated adaptive difficulty labels so loss recovery reads as a slight enemy edge rather than a counter to a winning edge.
+- Updated How to Play with the new loss-scaling rule.
+- Verification: `node --check app.js`; targeted Playwright probe confirmed a previous -80 enemy advantage reset to -5 after defeat and stayed -5 after upgrading the hero; follow-up probe confirmed the loss label `villains hold a slight +5 edge`; web-game client smoke started a battle through the keyboard focus path and rendered normally with no error artifacts.
+
 ## TODO
 
-- No open TODOs for the advantage-based difficulty follow-up.
+- No open TODOs for the loss difficulty follow-up.

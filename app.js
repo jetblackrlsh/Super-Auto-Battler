@@ -127,6 +127,11 @@ const GRADE_REWARDS = {
   D: { credits: 3, mutagens: 1 },
   F: { credits: 2, mutagens: 1 },
 };
+const LOSS_DIFFICULTY = {
+  minAdvantage: 5,
+  maxAdvantage: 20,
+  powerRate: 0.03,
+};
 let uid = 1;
 let activeTab = "shop";
 let activePage = "battle";
@@ -154,6 +159,7 @@ const state = {
   runLost: false,
   lastBattleGrade: null,
   lastBattleTune: null,
+  lastBattleWon: null,
   lastBattleAdvantage: 0,
   enemyAdvantageTarget: 0,
   celebration: null,
@@ -392,6 +398,7 @@ function resetRun() {
     runLost: false,
     lastBattleGrade: null,
     lastBattleTune: null,
+    lastBattleWon: null,
     lastBattleAdvantage: 0,
     enemyAdvantageTarget: 0,
     celebration: null,
@@ -730,12 +737,17 @@ function heroBattleStats(unit, index, lineupLength = activeUnits().length) {
 
 function adaptiveDifficulty() {
   const target = Math.max(0, Math.round(state.enemyAdvantageTarget || 0));
+  const label = target <= 0
+    ? "baseline assault"
+    : state.lastBattleWon
+      ? `villains counter your +${target} edge`
+      : `villains hold a slight +${target} edge`;
   return {
     threat: 0,
     extraEnemies: 0,
     playerWinAdvantage: Math.max(0, Math.round(state.lastBattleAdvantage || 0)),
     targetEnemyAdvantage: target,
-    label: target > 0 ? `villains counter your +${target} edge` : "baseline assault",
+    label,
   };
 }
 
@@ -764,6 +776,13 @@ function baseEnemyStats(template) {
 
 function enemyPlanPower(enemies) {
   return enemies.reduce((sum, enemy) => sum + statPower(enemy), 0);
+}
+
+function lossEnemyAdvantageTarget() {
+  const heroPower = teamTotals().power;
+  if (!heroPower) return LOSS_DIFFICULTY.minAdvantage;
+  const scaled = Math.round(heroPower * LOSS_DIFFICULTY.powerRate);
+  return Math.max(LOSS_DIFFICULTY.minAdvantage, Math.min(LOSS_DIFFICULTY.maxAdvantage, scaled));
 }
 
 function scaleEnemyPlanToAdvantage(enemies) {
@@ -1124,12 +1143,13 @@ function finishBattle(won) {
   state.credits += creditGain;
   state.mutagens += mutagenGain;
   state.lastBattleGrade = performance.grade;
+  state.lastBattleWon = won;
   processGearQualityAfterBattle();
   playBattleResultTune(won);
   if (won) state.victories += 1;
   if (!won) state.health -= 1;
   if (won) state.enemyAdvantageTarget = Math.max(0, state.battle.power?.advantage || 0);
-  if (!won) state.enemyAdvantageTarget = Math.max(0, Math.floor((state.enemyAdvantageTarget || 0) / 2));
+  if (!won) state.enemyAdvantageTarget = lossEnemyAdvantageTarget();
   state.resultBanner = { text: won ? "VICTORY" : "DEFEAT", won, performance };
   log(`${won ? "Victory" : "Defeat"} Grade ${performance.grade}: +${creditGain} credits, +${mutagenGain} mutagens. Enemies ${performance.enemiesDefeated}/${performance.totalEnemies}, heroes ${performance.heroesAlive}/${performance.totalHeroes}, HP ${performance.totalHealthRemaining}/${performance.maxTeamHealth}${won ? "." : ", -1 health."}`);
   if (state.health <= 0) {
@@ -1509,7 +1529,7 @@ function renderPage() {
           <section><h3>7. Upgrade</h3><p>Spend mutagens on hero upgrades and credits on gear upgrades. Gear slots are unlimited.</p></section>
           <section><h3>8. Sell</h3><p>Sell units, gear, or trade ${MUTAGEN_SALE.cost} mutagens for ${MUTAGEN_SALE.credits} credits when you need resources. Refunds are useful but lower than the full investment.</p></section>
           <section><h3>9. Scout</h3><p>Threat Intel shows the next enemy team, each enemy's stats, and whether your active lineup has the total stat advantage.</p></section>
-          <section><h3>10. Difficulty</h3><p>After a win, the next wave scales to beat your current Hero Power by the same advantage you had at the start of the won battle.</p></section>
+          <section><h3>10. Difficulty</h3><p>After a win, the next wave scales above your Hero Power by your last winning edge. After a loss, enemies reset to near-par with only a slight advantage.</p></section>
           <section><h3>11. Perform</h3><p>Squad cards track each hero's K/D as kills / deaths. After each battle, earn a grade from knockouts, survivors, and remaining HP.</p></section>
           <section><h3>12. Win the Run</h3><p>Win by defeating all enemies. If every active hero falls, lose 1 health. Win 10 battles before health reaches 0.</p></section>
         </div>
@@ -2041,6 +2061,7 @@ function renderGameToText() {
     mutagens: state.mutagens,
     lastBattleGrade: state.lastBattleGrade,
     lastBattleTune: state.lastBattleTune,
+    lastBattleWon: state.lastBattleWon,
     lastBattleAdvantage: Math.round(state.lastBattleAdvantage || 0),
     enemyAdvantageTarget: Math.round(state.enemyAdvantageTarget || 0),
     celebration: state.celebration ? { ttl: Number(state.celebration.ttl.toFixed(2)), max: state.celebration.max } : null,
