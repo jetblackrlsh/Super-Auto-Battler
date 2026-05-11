@@ -65,6 +65,14 @@ Original prompt: Make this project a public git hub repo. I want this to be a st
 - Expanded `render_game_to_text()` unit summaries with `gearEffects`, detailed equipped gear, and battle stats for easier verification.
 - Verification: `node --check app.js`; deterministic Playwright flow bought gear, equipped it, confirmed the summary/modifier text and Unequip button, unequipped the gear, confirmed the unit gear count returned to 0 and armory count returned to 1, inspected before/after screenshots, and found no console errors; web-game Playwright smoke test rendered a normal battle with no error artifacts.
 
+## 2026-05-10 Shop Slot Follow-up
+
+- Changed unit and gear purchases so the purchased shop slot becomes empty instead of immediately refilling.
+- Added Sold Out placeholder cards that tell the player to reroll the shop or finish a battle to refill the slot.
+- Kept rerolls and post-battle shop refreshes as the only refill paths, matching the intended shop pacing.
+- Updated `render_game_to_text()` so empty shop slots are reported as `null`.
+- Verification: `node --check app.js`; deterministic Playwright flow bought a unit and gear, confirmed those slots became `null` and showed Sold Out cards, confirmed reroll filled all slots, confirmed post-battle refresh filled all slots, inspected screenshots for each state, and found no console errors; web-game Playwright smoke test rendered a normal battle with no error artifacts.
+
 ## TODO
 
-- No open TODOs for the gear visibility follow-up.
+- No open TODOs for the shop slot follow-up.

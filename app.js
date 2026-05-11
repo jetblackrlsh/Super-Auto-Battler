@@ -292,7 +292,7 @@ function buyUnit(index) {
     state.squad.push(unit);
     log(`${template.name} ${unit.active ? "joined the active lineup" : "joined the bench"}.`);
   }
-  state.shop.units.splice(index, 1, pick(HERO_POOL));
+  state.shop.units[index] = null;
   renderAll();
 }
 
@@ -316,7 +316,7 @@ function buyGear(index) {
   state.gear.push(item);
   state.selectedGearId = item.id;
   log(`${template.name} added to the armory. Choose a hero to equip it.`);
-  state.shop.gear.splice(index, 1, pick(GEAR_POOL));
+  state.shop.gear[index] = null;
   activeTab = "gear";
   renderAll();
 }
@@ -828,6 +828,51 @@ function gearRow(gear, equipped = false, ownerId = null) {
   `;
 }
 
+function emptyShopCard(kind) {
+  return `
+    <article class="card shop-empty-card">
+      <div class="empty-slot-art">EMPTY</div>
+      <div>
+        <h3>Sold Out</h3>
+        <p class="meta">${kind} slot empty</p>
+        <p class="lore">Reroll the shop or finish a battle to refill this slot.</p>
+      </div>
+    </article>
+  `;
+}
+
+function shopUnitCard(unit, index) {
+  if (!unit) return emptyShopCard("Recruit");
+  return `
+    <article class="card">
+      ${portrait(spriteSrc("hero", unit.sprite), unit.name)}
+      <div>
+        <h3>${unit.name}</h3>
+        <p class="meta">${unit.role} | ${unit.ability}</p>
+        <p class="lore">${unit.lore}</p>
+        <div class="chips"><span class="chip">${unit.trait}</span><span class="chip">Cost ${unit.cost}</span></div>
+        <div class="row-actions"><button data-action="buyUnit" data-index="${index}" ${state.credits < unit.cost ? "disabled" : ""}>${state.squad.some((owned) => owned.template === unit.name) ? "Buy Duplicate Upgrade" : "Buy Unit"}</button></div>
+      </div>
+    </article>
+  `;
+}
+
+function shopGearCard(gear, index) {
+  if (!gear) return emptyShopCard("Gear");
+  return `
+    <article class="card">
+      ${portrait(spriteSrc("gear", gear.icon), gear.name)}
+      <div>
+        <h3>${gear.name}</h3>
+        <p class="meta">Lv 1 | ${modText(gear.mods)} | ${gear.trait}</p>
+        <p class="lore">${gear.lore}</p>
+        <div class="chips"><span class="chip">Cost ${gear.cost}</span></div>
+        <div class="row-actions"><button data-action="buyGear" data-index="${index}" ${state.credits < gear.cost ? "disabled" : ""}>Buy Gear</button></div>
+      </div>
+    </article>
+  `;
+}
+
 function renderPanel() {
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.tab === activeTab);
@@ -837,33 +882,11 @@ function renderPanel() {
     root.innerHTML = `
       <div class="section-title"><span>Recruit</span><span>Active ${activeUnits().length}/${MAX_ACTIVE_UNITS} | Owned ${state.squad.length}</span></div>
       <div class="grid-list">
-        ${state.shop.units.map((unit, index) => `
-          <article class="card">
-            ${portrait(spriteSrc("hero", unit.sprite), unit.name)}
-            <div>
-              <h3>${unit.name}</h3>
-              <p class="meta">${unit.role} | ${unit.ability}</p>
-              <p class="lore">${unit.lore}</p>
-              <div class="chips"><span class="chip">${unit.trait}</span><span class="chip">Cost ${unit.cost}</span></div>
-              <div class="row-actions"><button data-action="buyUnit" data-index="${index}" ${state.credits < unit.cost ? "disabled" : ""}>${state.squad.some((owned) => owned.template === unit.name) ? "Buy Duplicate Upgrade" : "Buy Unit"}</button></div>
-            </div>
-          </article>
-        `).join("")}
+        ${state.shop.units.map(shopUnitCard).join("")}
       </div>
       <div class="section-title section-spaced"><span>Gear</span><span>Reroll 2 credits</span></div>
       <div class="grid-list">
-        ${state.shop.gear.map((gear, index) => `
-          <article class="card">
-            ${portrait(spriteSrc("gear", gear.icon), gear.name)}
-            <div>
-              <h3>${gear.name}</h3>
-              <p class="meta">Lv 1 | ${modText(gear.mods)} | ${gear.trait}</p>
-              <p class="lore">${gear.lore}</p>
-              <div class="chips"><span class="chip">Cost ${gear.cost}</span></div>
-              <div class="row-actions"><button data-action="buyGear" data-index="${index}" ${state.credits < gear.cost ? "disabled" : ""}>Buy Gear</button></div>
-            </div>
-          </article>
-        `).join("")}
+        ${state.shop.gear.map(shopGearCard).join("")}
       </div>
     `;
   } else if (activeTab === "squad") {
@@ -1369,8 +1392,8 @@ function renderGameToText() {
     bench: benchUnits().map((unit, index) => unitSummary(unit, index)),
     armory: state.gear.map((gear) => ({ name: gear.name, level: gear.level })),
     shop: {
-      units: state.shop.units.map((unit) => unit.name),
-      gear: state.shop.gear.map((gear) => gear.name),
+      units: state.shop.units.map((unit) => unit?.name || null),
+      gear: state.shop.gear.map((gear) => gear?.name || null),
     },
     selectedGear: gearById(state.selectedGearId)?.name || null,
     resultBanner: state.resultBanner?.text || null,

@@ -272,6 +272,28 @@ h1 {
   line-height: 1.15;
 }
 
+.shop-empty-card {
+  border-style: dashed;
+  background:
+    linear-gradient(135deg, rgba(243,246,255,0.84), rgba(227, 241, 250, 0.72)),
+    radial-gradient(circle at top right, rgba(23,200,255,0.1), transparent 10rem);
+  opacity: 0.86;
+}
+
+.empty-slot-art {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border: 2px dashed rgba(17, 19, 38, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.48);
+  color: #596078;
+  font-size: 0.72rem;
+  font-weight: 1000;
+  letter-spacing: 0.04em;
+}
+
 .meta {
   margin: 0;
   color: #5b637e;
