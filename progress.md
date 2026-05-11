@@ -11,6 +11,19 @@ Original prompt: Make this project a public git hub repo. I want this to be a st
 - Ran a second web-game Playwright pass that bought a unit, activated Start Battle through the focus path, advanced the fight, and confirmed a victory advanced from stage 1 to stage 2 with win bonus rewards.
 - Captured desktop and mobile page screenshots with Playwright; no console errors were reported, and buying/selecting/equipping gear updated the squad state.
 
+## 2026-05-10 Follow-up
+
+- Generated a new built-in image background for the page and copied it to `assets/omega-city-page-bg.png`.
+- Added `assets/omega-city-logo.svg` as a transparent-background game logo.
+- Extracted transparent PNG hero, villain, and gear cutouts under `assets/sprites/` so checkerboard backgrounds no longer appear in gameplay or UI portraits.
+- Changed unit loadouts from one gear item to unlimited gear arrays. The armory now lets the player equip a chosen gear piece directly to a chosen hero, and stacked gear is reflected in stats.
+- Added lore text for every hero and gear piece.
+- Added How to Play and Story pages in the static app shell.
+- Changed the run win condition to 10 victories and updated state output to report `victories` and `targetVictories`.
+- Added unique per-character battle effect types and synthesized MIDI-style Web Audio hit effects.
+- Restyled the UI around the generated page background, transparent logo, neon anime colors, stronger panels, and transparent sprites.
+- Verification: `node --check app.js`; web-game Playwright battle smoke with no console errors; desktop How/Story screenshots; mid-battle effects screenshot; mobile Battle/Story screenshots; custom long-run Playwright automation reached `victories: 10` and `runWon: true` with a heavily stacked gear build.
+
 ## TODO
 
-- Initialize git, publish as a public GitHub repository, and enable GitHub Pages from the root of `main`.
+- Commit and push the follow-up implementation, then verify GitHub Pages updates.

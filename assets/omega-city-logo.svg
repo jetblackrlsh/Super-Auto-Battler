@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 240" role="img" aria-labelledby="title desc">
+  <title id="title">Omega City Mutagen War</title>
+  <desc id="desc">Stylized transparent superhero game logo.</desc>
+  <defs>
+    <linearGradient id="g1" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#fff45c"/>
+      <stop offset="0.36" stop-color="#29e7ff"/>
+      <stop offset="0.7" stop-color="#ff3f9c"/>
+      <stop offset="1" stop-color="#79ff57"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="0" x2="1">
+      <stop offset="0" stop-color="#07123f"/>
+      <stop offset="1" stop-color="#2c0a57"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-35%" width="140%" height="170%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feColorMatrix in="blur" values="0 0 0 0 0.05 0 0 0 0 0.9 0 0 0 0 1 0 0 0 0.85 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#glow)">
+    <path d="M92 26h92l-29 50 58-6-70 72 24-58-59 9 23-39-52 11z" fill="url(#g1)" stroke="#fff" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M52 172h832l28 32H24z" fill="url(#g2)" stroke="url(#g1)" stroke-width="5"/>
+    <text x="232" y="89" fill="url(#g1)" stroke="#ffffff" stroke-width="2" font-family="Impact, Arial Black, sans-serif" font-size="72" letter-spacing="2">OMEGA CITY</text>
+    <text x="232" y="156" fill="#ffffff" stroke="#121636" stroke-width="5" paint-order="stroke" font-family="Impact, Arial Black, sans-serif" font-size="62" letter-spacing="1">MUTAGEN WAR</text>
+    <text x="66" y="203" fill="#ffe95f" font-family="Arial Black, sans-serif" font-size="24" letter-spacing="5">SUPERHERO AUTO BATTLER</text>
+  </g>
+</svg>

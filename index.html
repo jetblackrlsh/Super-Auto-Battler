@@ -13,12 +13,18 @@
   <body>
     <main class="shell">
       <section class="hero-strip" aria-label="Run status">
-        <div>
-          <p class="kicker">Omega City Mutagen War</p>
+        <div class="brand-block">
+          <img class="game-logo" src="assets/omega-city-logo.svg" alt="Omega City Mutagen War">
           <h1>Forge the ultimate hero team.</h1>
         </div>
         <div class="stats" id="runStats"></div>
       </section>
+
+      <nav class="page-nav" aria-label="Game pages">
+        <button class="active" data-page="battle">Battle</button>
+        <button data-page="how">How to Play</button>
+        <button data-page="story">Story</button>
+      </nav>
 
       <section class="game-layout">
         <div class="arena-wrap">
@@ -47,6 +53,8 @@
         </div>
         <ol id="eventLog"></ol>
       </section>
+
+      <section id="infoPage" class="info-page" hidden></section>
     </main>
 
     <script src="app.js"></script>
