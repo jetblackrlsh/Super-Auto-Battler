@@ -88,6 +88,10 @@ const REROLL_COSTS = {
   gear: 1,
   both: 2,
 };
+const MUTAGEN_SALE = {
+  cost: 2,
+  credits: 3,
+};
 const GEAR_QUALITY = {
   max: 100,
   min: 25,
@@ -621,10 +625,10 @@ function moveUnit(id, direction) {
 }
 
 function sellMutagens() {
-  if (state.mode !== "planning" || state.mutagens < 2) return;
-  state.mutagens -= 2;
-  state.credits += 3;
-  log("Sold 2 mutagens for 3 credits.");
+  if (state.mode !== "planning" || state.mutagens < MUTAGEN_SALE.cost) return;
+  state.mutagens -= MUTAGEN_SALE.cost;
+  state.credits += MUTAGEN_SALE.credits;
+  log(`Sold ${MUTAGEN_SALE.cost} mutagens for ${MUTAGEN_SALE.credits} credits.`);
   renderAll();
 }
 
@@ -990,6 +994,16 @@ function renderStats() {
   ].map(([label, value]) => `<div class="stat"><span>${label}</span><strong>${value}</strong></div>`).join("");
 }
 
+function renderActionButtons() {
+  const sellButton = document.querySelector('[data-action="sellMutagens"]');
+  if (!sellButton) return;
+  const label = `Sell ${MUTAGEN_SALE.cost} Mutagens to gain ${MUTAGEN_SALE.credits} Credits`;
+  sellButton.innerHTML = `<span>Sell ${MUTAGEN_SALE.cost} Mutagens</span><small>Gain ${MUTAGEN_SALE.credits} Credits</small>`;
+  sellButton.setAttribute("aria-label", label);
+  sellButton.title = `${label}. You currently have ${state.mutagens} mutagen${state.mutagens === 1 ? "" : "s"}.`;
+  sellButton.disabled = state.mode !== "planning" || state.mutagens < MUTAGEN_SALE.cost;
+}
+
 function spriteSrc(kind, index) {
   if (kind === "gear") return GEAR_SPRITES[index];
   if (kind === "villain") return VILLAIN_SPRITES[index];
@@ -1308,7 +1322,7 @@ function renderPage() {
           <section><h3>3. Bench</h3><p>Bench heroes stay owned. You can equip and upgrade them without using an active battle slot.</p></section>
           <section><h3>4. Gear Quality</h3><p>Equipped gear loses quality when active heroes battle, reducing its bonuses. Unequip gear into the armory to restore more quality each rested battle.</p></section>
           <section><h3>5. Upgrade</h3><p>Spend mutagens on hero upgrades and credits on gear upgrades. Gear slots are unlimited.</p></section>
-          <section><h3>6. Sell</h3><p>Sell units, gear, or 2 mutagens when you need resources. Refunds are useful but lower than the full investment.</p></section>
+          <section><h3>6. Sell</h3><p>Sell units, gear, or trade ${MUTAGEN_SALE.cost} mutagens for ${MUTAGEN_SALE.credits} credits when you need resources. Refunds are useful but lower than the full investment.</p></section>
           <section><h3>7. Scout</h3><p>Threat Intel shows the next enemy team, each enemy's stats, and whether your active lineup has the total stat advantage.</p></section>
           <section><h3>8. Perform</h3><p>Squad cards track each hero's KOs, falls, and K/D ratio. After each battle, earn a grade from knockouts, survivors, and remaining HP.</p></section>
           <section><h3>9. Win the Run</h3><p>Win by defeating all enemies. If every active hero falls, lose 1 health. Win 10 battles before health reaches 0.</p></section>
@@ -1680,6 +1694,7 @@ function refreshFocusables() {
 
 function renderAll() {
   renderStats();
+  renderActionButtons();
   renderPanel();
   renderLog();
   renderPage();
@@ -1840,6 +1855,7 @@ function renderGameToText() {
       gear: state.shop.gear.map((gear) => gear?.name || null),
       rerollCosts: { ...REROLL_COSTS },
     },
+    mutagenSale: { ...MUTAGEN_SALE, canSell: state.mode === "planning" && state.mutagens >= MUTAGEN_SALE.cost },
     selectedGear: gearById(state.selectedGearId)?.name || null,
     resultBanner: state.resultBanner?.text || null,
     battleGrade: state.resultBanner?.performance || null,

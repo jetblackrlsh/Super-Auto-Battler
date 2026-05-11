@@ -113,6 +113,12 @@ Original prompt: Make this project a public git hub repo. I want this to be a st
 - Updated How to Play with gear quality guidance.
 - Verification: `node --check app.js`; Playwright probe confirmed equipped gear quality drops after battle use and effective modifiers decrease, then unequipped gear restores quality after resting; forced 10th-win probe confirmed `runWon: true`, `lastBattleTune: "omega-victory"`, and the celebration overlay; screenshots inspected for the gear quality UI, final victory celebration, and web-game smoke battle with no error artifacts.
 
+## 2026-05-10 Mutagen Sale Clarity Follow-up
+
+- Replaced the generic Sell Mutagens action copy with a two-line button that explicitly says it costs 2 mutagens and gains 3 credits.
+- Centralized the mutagen sale rate in `MUTAGEN_SALE`, reused it for the button, log message, How to Play text, disabled state, accessibility label, tooltip, and `render_game_to_text()`.
+- Verification: `node --check app.js`; web-game Playwright client clicked the mutagen sale action and confirmed credits/mutagens changed correctly; targeted Playwright checks confirmed the button label, title, exposed sale rate, and disabled state when mutagens dropped below 2; full-page screenshot inspected for readable action-row layout.
+
 ## TODO
 
-- No open TODOs for the gear quality and run victory follow-up.
+- No open TODOs for the mutagen sale clarity follow-up.

@@ -201,6 +201,14 @@ h1 {
   padding: 10px;
 }
 
+.battle-actions button small {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.78rem;
+  line-height: 1.05;
+  opacity: 0.82;
+}
+
 .side-panel {
   overflow: hidden;
   min-height: 620px;
