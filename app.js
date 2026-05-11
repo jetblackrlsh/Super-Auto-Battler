@@ -126,6 +126,7 @@ const state = {
   runWon: false,
   runLost: false,
   lastBattleGrade: null,
+  lastBattleTune: null,
 };
 
 function rand(max) {
@@ -228,6 +229,43 @@ function playMidiEffect(notes, color = "#fff") {
   });
 }
 
+function playBattleResultTune(won) {
+  state.lastBattleTune = won ? "victory" : "defeat";
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  const master = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
+  const melody = won
+    ? [60, 64, 67, 72, 76, 79]
+    : [60, 58, 55, 51, 48];
+  filter.type = won ? "highpass" : "lowpass";
+  filter.frequency.setValueAtTime(won ? 420 : 1350, now);
+  if (won) filter.frequency.exponentialRampToValueAtTime(900, now + 0.48);
+  else filter.frequency.exponentialRampToValueAtTime(300, now + 0.58);
+  master.gain.setValueAtTime(0.0001, now);
+  master.gain.exponentialRampToValueAtTime(won ? 0.085 : 0.075, now + 0.035);
+  master.gain.exponentialRampToValueAtTime(0.0001, now + (won ? 0.82 : 0.74));
+  filter.connect(master);
+  master.connect(audioCtx.destination);
+  melody.forEach((note, index) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const start = now + index * (won ? 0.075 : 0.095);
+    const length = won ? 0.2 : 0.26;
+    osc.type = won ? (index % 2 ? "triangle" : "square") : (index % 2 ? "sawtooth" : "triangle");
+    osc.frequency.setValueAtTime(midiToHz(note), start);
+    if (won) osc.frequency.exponentialRampToValueAtTime(midiToHz(note + 12), start + length * 0.65);
+    else osc.frequency.exponentialRampToValueAtTime(midiToHz(note - 5), start + length);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(won ? 0.72 : 0.58, start + 0.018);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + length);
+    osc.connect(gain);
+    gain.connect(filter);
+    osc.start(start);
+    osc.stop(start + length + 0.03);
+  });
+}
+
 function playDefeatEffect(unit) {
   if (!audioCtx) return;
   const now = audioCtx.currentTime;
@@ -274,6 +312,7 @@ function resetRun() {
     runWon: false,
     runLost: false,
     lastBattleGrade: null,
+    lastBattleTune: null,
   });
   refreshEnemyPlan();
   rerollShop(true);
@@ -796,6 +835,7 @@ function finishBattle(won) {
   state.credits += creditGain;
   state.mutagens += mutagenGain;
   state.lastBattleGrade = performance.grade;
+  playBattleResultTune(won);
   if (won) state.victories += 1;
   if (!won) state.health -= 1;
   state.resultBanner = { text: won ? "VICTORY" : "DEFEAT", won, performance };
@@ -1591,6 +1631,7 @@ function renderGameToText() {
     credits: state.credits,
     mutagens: state.mutagens,
     lastBattleGrade: state.lastBattleGrade,
+    lastBattleTune: state.lastBattleTune,
     adaptiveDifficulty: { ...difficulty },
     teamComparison: comparison,
     upcomingEnemies: plannedEnemies().map((enemy) => ({

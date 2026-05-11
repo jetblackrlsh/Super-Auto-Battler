@@ -91,6 +91,13 @@ Original prompt: Make this project a public git hub repo. I want this to be a st
 - Expanded `render_game_to_text()` with `teamComparison`, `upcomingEnemies`, and each unit's `combatRecord`.
 - Verification: `node --check app.js`; Playwright state probe confirmed upcoming enemy stats match the battle's actual enemies, forced K/D changed from 0/0 to 1/0 to 1/1, and adding an active hero shifted the advantage value; screenshots inspected for Threat Intel, squad K/D, and advantage-shift states; web-game Playwright smoke test rendered a normal battle with no error artifacts.
 
+## 2026-05-10 Battle Result Tunes Follow-up
+
+- Added a short rising synthesized MIDI-style victory tune when a battle ends in Victory.
+- Added a short descending synthesized MIDI-style defeat tune when a battle ends in Defeat.
+- Added `lastBattleTune` to `render_game_to_text()` so result-audio paths can be verified.
+- Verification: `node --check app.js`; targeted Playwright browser probe forced both battle-end paths and confirmed `lastBattleTune: "victory"` and `lastBattleTune: "defeat"` with a running `AudioContext` and no console errors; web-game Playwright smoke test rendered a normal battle with no error artifacts.
+
 ## TODO
 
-- No open TODOs for the K/D and Threat Intel follow-up.
+- No open TODOs for the battle result tunes follow-up.
