@@ -49,6 +49,14 @@ Original prompt: Make this project a public git hub repo. I want this to be a st
 - Kept the final battle scene visible behind Victory/Defeat banners so the last defeated character remains readable instead of immediately swapping back to the planning preview.
 - Verification: `node --check app.js`; deterministic Playwright scenarios forced enemy and hero defeats, confirmed `defeated: true` and active `defeat` effects in `render_game_to_text()`, captured and inspected both screenshots, and reported no console errors; web-game Playwright client smoke test rendered a normal battle state with no error artifacts.
 
+## 2026-05-10 Battle Grade Follow-up
+
+- Added S/A/B/C/D/F performance grades at battle end.
+- Grades are calculated from enemy units defeated, active heroes left alive, and total remaining team HP.
+- Replaced flat battle rewards with grade-based credit and mutagen payouts, with stage scaling still included.
+- Updated the Victory/Defeat banner to show the grade, rewards, and scoring metrics, and added grading instructions to How to Play.
+- Verification: `node --check app.js`; deterministic Playwright scenarios forced an S-grade victory and F-grade defeat, confirmed grade metrics and rewards through `render_game_to_text()`, captured and inspected both result screenshots, and reported no console errors; web-game Playwright client smoke test rendered a normal active battle with no error artifacts.
+
 ## TODO
 
-- No open TODOs for the defeat effect follow-up.
+- No open TODOs for the battle grade follow-up.

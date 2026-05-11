@@ -83,6 +83,14 @@ const GEAR_POOL = [
 ];
 
 const MAX_ACTIVE_UNITS = 4;
+const GRADE_REWARDS = {
+  S: { credits: 11, mutagens: 5 },
+  A: { credits: 9, mutagens: 4 },
+  B: { credits: 7, mutagens: 3 },
+  C: { credits: 5, mutagens: 2 },
+  D: { credits: 3, mutagens: 1 },
+  F: { credits: 2, mutagens: 1 },
+};
 
 let uid = 1;
 let activeTab = "shop";
@@ -560,6 +568,47 @@ function nearest(source, list) {
   return alive(list).sort((a, b) => Math.abs(a.x - source.x) - Math.abs(b.x - source.x))[0];
 }
 
+function letterGrade(score) {
+  if (score >= 90) return "S";
+  if (score >= 78) return "A";
+  if (score >= 64) return "B";
+  if (score >= 48) return "C";
+  if (score >= 30) return "D";
+  return "F";
+}
+
+function gradeBattlePerformance() {
+  const battle = state.battle;
+  const totalEnemies = battle.enemies.length;
+  const enemiesDefeated = battle.enemies.filter((unit) => unit.hp <= 0).length;
+  const totalHeroes = battle.heroes.length;
+  const heroesAlive = battle.heroes.filter((unit) => unit.hp > 0).length;
+  const totalHealthRemaining = Math.round(battle.heroes.reduce((sum, unit) => sum + Math.max(0, unit.hp), 0));
+  const maxTeamHealth = Math.round(battle.heroes.reduce((sum, unit) => sum + unit.maxHp, 0));
+  const enemyScore = totalEnemies ? enemiesDefeated / totalEnemies : 0;
+  const survivorScore = totalHeroes ? heroesAlive / totalHeroes : 0;
+  const healthScore = maxTeamHealth ? totalHealthRemaining / maxTeamHealth : 0;
+  const score = Math.round(enemyScore * 50 + survivorScore * 25 + healthScore * 25);
+  const grade = letterGrade(score);
+  const stageCredits = Math.ceil(state.stage * 0.8);
+  const stageMutagens = Math.floor(state.stage / 4);
+  const gradeReward = GRADE_REWARDS[grade];
+  return {
+    grade,
+    score,
+    enemiesDefeated,
+    totalEnemies,
+    heroesAlive,
+    totalHeroes,
+    totalHealthRemaining,
+    maxTeamHealth,
+    rewards: {
+      credits: stageCredits + gradeReward.credits,
+      mutagens: stageMutagens + gradeReward.mutagens,
+    },
+  };
+}
+
 function markDefeated(unit) {
   unit.defeated = true;
   unit.defeatFlash = 1.25;
@@ -640,16 +689,15 @@ function updateBattle(dt) {
 function finishBattle(won) {
   if (!state.battle || state.battle.status !== "fighting") return;
   state.battle.status = won ? "won" : "lost";
-  const baseCredits = 4 + Math.ceil(state.stage * 1.2);
-  const baseMutagens = 2 + Math.floor(state.stage / 3);
-  const creditGain = baseCredits + (won ? 5 : 0);
-  const mutagenGain = baseMutagens + (won ? 2 : 0);
+  const performance = gradeBattlePerformance();
+  const creditGain = performance.rewards.credits;
+  const mutagenGain = performance.rewards.mutagens;
   state.credits += creditGain;
   state.mutagens += mutagenGain;
   if (won) state.victories += 1;
   if (!won) state.health -= 1;
-  state.resultBanner = { text: won ? "VICTORY" : "DEFEAT", won };
-  log(`${won ? "Victory" : "Defeat"}: +${creditGain} credits, +${mutagenGain} mutagens${won ? "." : ", -1 health."}`);
+  state.resultBanner = { text: won ? "VICTORY" : "DEFEAT", won, performance };
+  log(`${won ? "Victory" : "Defeat"} Grade ${performance.grade}: +${creditGain} credits, +${mutagenGain} mutagens. Enemies ${performance.enemiesDefeated}/${performance.totalEnemies}, heroes ${performance.heroesAlive}/${performance.totalHeroes}, HP ${performance.totalHealthRemaining}/${performance.maxTeamHealth}${won ? "." : ", -1 health."}`);
   if (state.health <= 0) {
     state.runLost = true;
     state.mode = "planning";
@@ -838,7 +886,8 @@ function renderPage() {
           <section><h3>3. Bench</h3><p>Bench heroes stay owned. You can equip and upgrade them without using an active battle slot.</p></section>
           <section><h3>4. Upgrade</h3><p>Spend mutagens on hero upgrades and credits on gear upgrades. Gear slots are unlimited.</p></section>
           <section><h3>5. Sell</h3><p>Sell units, gear, or 2 mutagens when you need resources. Refunds are useful but lower than the full investment.</p></section>
-          <section><h3>6. Win the Run</h3><p>Win by defeating all enemies. If every active hero falls, lose 1 health. Win 10 battles before health reaches 0.</p></section>
+          <section><h3>6. Grade</h3><p>After each battle, earn a performance grade from enemy knockouts, surviving heroes, and remaining team HP. Higher grades pay more credits and mutagens.</p></section>
+          <section><h3>7. Win the Run</h3><p>Win by defeating all enemies. If every active hero falls, lose 1 health. Win 10 battles before health reaches 0.</p></section>
         </div>
       </article>
     `;
@@ -1091,7 +1140,7 @@ function drawFloater(floater) {
 
 function drawResultBanner(banner) {
   ctx.save();
-  const grad = ctx.createLinearGradient(320, 230, 960, 350);
+  const grad = ctx.createLinearGradient(320, 220, 960, 415);
   if (banner.won) {
     grad.addColorStop(0, "rgba(255, 233, 95, 0.96)");
     grad.addColorStop(0.5, "rgba(23, 232, 255, 0.94)");
@@ -1104,18 +1153,31 @@ function drawResultBanner(banner) {
   ctx.strokeStyle = "#000";
   ctx.lineWidth = 8;
   ctx.beginPath();
-  ctx.roundRect(330, 245, 620, 138, 18);
+  ctx.roundRect(308, 226, 664, 196, 18);
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = "#fff";
-  ctx.font = "900 78px system-ui";
+  ctx.font = "900 64px system-ui";
   ctx.textAlign = "center";
-  ctx.strokeText(banner.text, 640, 337);
-  ctx.fillText(banner.text, 640, 337);
-  ctx.font = "900 22px system-ui";
-  const detail = banner.won ? "Bonus rewards earned" : "Health lost, regroup in the shop";
-  ctx.strokeText(detail, 640, 370);
-  ctx.fillText(detail, 640, 370);
+  ctx.strokeText(banner.text, 640, 302);
+  ctx.fillText(banner.text, 640, 302);
+  if (banner.performance) {
+    const p = banner.performance;
+    ctx.font = "900 42px system-ui";
+    ctx.strokeText(`GRADE ${p.grade}`, 640, 352);
+    ctx.fillText(`GRADE ${p.grade}`, 640, 352);
+    ctx.font = "900 21px system-ui";
+    ctx.strokeText(`+${p.rewards.credits} credits | +${p.rewards.mutagens} mutagens`, 640, 382);
+    ctx.fillText(`+${p.rewards.credits} credits | +${p.rewards.mutagens} mutagens`, 640, 382);
+    ctx.font = "900 17px system-ui";
+    ctx.strokeText(`KO ${p.enemiesDefeated}/${p.totalEnemies} | Heroes ${p.heroesAlive}/${p.totalHeroes} | HP ${p.totalHealthRemaining}/${p.maxTeamHealth}`, 640, 407);
+    ctx.fillText(`KO ${p.enemiesDefeated}/${p.totalEnemies} | Heroes ${p.heroesAlive}/${p.totalHeroes} | HP ${p.totalHealthRemaining}/${p.maxTeamHealth}`, 640, 407);
+  } else {
+    ctx.font = "900 22px system-ui";
+    const detail = banner.won ? "Rewards earned" : "Health lost, regroup in the shop";
+    ctx.strokeText(detail, 640, 370);
+    ctx.fillText(detail, 640, 370);
+  }
   ctx.restore();
 }
 
@@ -1259,6 +1321,7 @@ function renderGameToText() {
     },
     selectedGear: gearById(state.selectedGearId)?.name || null,
     resultBanner: state.resultBanner?.text || null,
+    battleGrade: state.resultBanner?.performance || null,
     runWon: state.runWon,
     runLost: state.runLost,
     battle,
