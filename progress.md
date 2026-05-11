@@ -126,6 +126,13 @@ Original prompt: Make this project a public git hub repo. I want this to be a st
 - Added type labels and match guidance to hero cards, equipped gear rows, shop gear cards, armory gear cards, How to Play, and `render_game_to_text()`.
 - Verification: `node --check app.js`; targeted Playwright state check confirmed matching Solar gear increased Sun Core from ATK +3 to combat ATK +4 while mismatched gear stayed unchanged, and exposed `typeRules`/`typeResonance`; screenshots inspected for Squad type resonance, How to Play type instructions, and a normal web-game client battle smoke with no error artifacts.
 
+## 2026-05-10 K/D Display Follow-up
+
+- Changed squad K/D display from a calculated ratio to the raw `kills / deaths` format requested by the user.
+- Updated `combatRecord` in `render_game_to_text()` to expose `display` alongside raw `kills` and `deaths`, with no ratio calculation.
+- Updated How to Play wording so K/D is described as kills / deaths.
+- Verification: `node --check app.js`; targeted Playwright state check forced a 3 kill / 1 death record and confirmed the squad card displayed `K/D: 3 / 1`; web-game client smoke confirmed fresh records expose `display: "0 / 0"` and rendered a normal battle with no error artifacts.
+
 ## TODO
 
-- No open TODOs for the type resonance follow-up.
+- No open TODOs for the K/D display follow-up.

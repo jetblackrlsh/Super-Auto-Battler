@@ -1068,8 +1068,11 @@ function roundStat(value) {
 }
 
 function combatRecord(unit) {
-  const ratio = unit.deaths === 0 ? (unit.kills > 0 ? "Perfect" : "0.00") : (unit.kills / unit.deaths).toFixed(2);
-  return { kills: unit.kills, deaths: unit.deaths, ratio };
+  return {
+    kills: unit.kills,
+    deaths: unit.deaths,
+    display: `${unit.kills} / ${unit.deaths}`,
+  };
 }
 
 function teamTotals() {
@@ -1149,9 +1152,7 @@ function unitCard(unit) {
           <span class="chip">HP ${unit.maxHp}</span>
           <span class="chip">ATK ${unit.atk}</span>
           <span class="chip">ARM ${unit.armor}</span>
-          <span class="chip">KO ${record.kills}</span>
-          <span class="chip">Falls ${record.deaths}</span>
-          <span class="chip">K/D ${record.ratio}</span>
+          <span class="chip">K/D: ${record.display}</span>
           <span class="chip">Dupes ${unit.duplicateCount}</span>
           <span class="chip">Gear ${unit.gear.length}</span>
         </div>
@@ -1370,7 +1371,7 @@ function renderPage() {
           <section><h3>6. Upgrade</h3><p>Spend mutagens on hero upgrades and credits on gear upgrades. Gear slots are unlimited.</p></section>
           <section><h3>7. Sell</h3><p>Sell units, gear, or trade ${MUTAGEN_SALE.cost} mutagens for ${MUTAGEN_SALE.credits} credits when you need resources. Refunds are useful but lower than the full investment.</p></section>
           <section><h3>8. Scout</h3><p>Threat Intel shows the next enemy team, each enemy's stats, and whether your active lineup has the total stat advantage.</p></section>
-          <section><h3>9. Perform</h3><p>Squad cards track each hero's KOs, falls, and K/D ratio. After each battle, earn a grade from knockouts, survivors, and remaining HP.</p></section>
+          <section><h3>9. Perform</h3><p>Squad cards track each hero's K/D as kills / deaths. After each battle, earn a grade from knockouts, survivors, and remaining HP.</p></section>
           <section><h3>10. Win the Run</h3><p>Win by defeating all enemies. If every active hero falls, lose 1 health. Win 10 battles before health reaches 0.</p></section>
         </div>
       </article>
