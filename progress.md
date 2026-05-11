@@ -119,6 +119,13 @@ Original prompt: Make this project a public git hub repo. I want this to be a st
 - Centralized the mutagen sale rate in `MUTAGEN_SALE`, reused it for the button, log message, How to Play text, disabled state, accessibility label, tooltip, and `render_game_to_text()`.
 - Verification: `node --check app.js`; web-game Playwright client clicked the mutagen sale action and confirmed credits/mutagens changed correctly; targeted Playwright checks confirmed the button label, title, exposed sale rate, and disabled state when mutagens dropped below 2; full-page screenshot inspected for readable action-row layout.
 
+## 2026-05-10 Type Resonance Follow-up
+
+- Added a same-type equipment mechanic: gear equipped to a hero with the same type now gets +25% gear stats before combat.
+- Made the existing team type system clearer: active heroes and equipped gear count toward x2 team type bonuses, and the squad header now shows the actual bonus text such as `Solar x2: +2 ATK`.
+- Added type labels and match guidance to hero cards, equipped gear rows, shop gear cards, armory gear cards, How to Play, and `render_game_to_text()`.
+- Verification: `node --check app.js`; targeted Playwright state check confirmed matching Solar gear increased Sun Core from ATK +3 to combat ATK +4 while mismatched gear stayed unchanged, and exposed `typeRules`/`typeResonance`; screenshots inspected for Squad type resonance, How to Play type instructions, and a normal web-game client battle smoke with no error artifacts.
+
 ## TODO
 
-- No open TODOs for the mutagen sale clarity follow-up.
+- No open TODOs for the type resonance follow-up.

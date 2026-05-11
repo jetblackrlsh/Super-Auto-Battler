@@ -92,6 +92,16 @@ const MUTAGEN_SALE = {
   cost: 2,
   credits: 3,
 };
+const TYPE_MATCH_BONUS = 0.25;
+const TRAIT_BONUS_TEXT = {
+  Solar: "+2 ATK",
+  Velocity: "+0.14 SPD",
+  Storm: "+7 HP",
+  Tech: "+1 ATK, +1 ARM",
+  Crystal: "+2 ARM",
+  Mystic: "+2 ATK, +0.06 SPD",
+  Mutant: "+9 HP, +1 ATK",
+};
 const GEAR_QUALITY = {
   max: 100,
   min: 25,
@@ -500,6 +510,28 @@ function effectiveMods(gear) {
   }, {});
 }
 
+function typeMatched(unit, gear) {
+  return !!unit && unit.trait === gear.trait;
+}
+
+function boostedMods(mods) {
+  return Object.entries(mods).reduce((boosted, [key, value]) => {
+    const scaled = value * (1 + TYPE_MATCH_BONUS);
+    boosted[key] = key === "speed" ? Number(scaled.toFixed(2)) : Math.max(1, Math.ceil(scaled));
+    return boosted;
+  }, {});
+}
+
+function gearModsForUnit(gear, unit) {
+  const mods = effectiveMods(gear);
+  return typeMatched(unit, gear) ? boostedMods(mods) : mods;
+}
+
+function typeMatchText(gear, unit = null) {
+  if (!unit) return `Type ${gear.trait}: +${Math.round(TYPE_MATCH_BONUS * 100)}% stats on matching heroes`;
+  return typeMatched(unit, gear) ? `Type match +${Math.round(TYPE_MATCH_BONUS * 100)}%` : "Type mismatch";
+}
+
 function qualityText(gear) {
   return `${Math.round(gearQuality(gear))}% quality`;
 }
@@ -646,7 +678,7 @@ function traitBonuses() {
   const counts = traitCounts();
   return Object.entries(counts)
     .filter(([, count]) => count >= 2)
-    .map(([trait, count]) => `${trait} x${count}`);
+    .map(([trait, count]) => `${trait} x${count}: ${TRAIT_BONUS_TEXT[trait] || "team boost"}`);
 }
 
 function unitBattleStats(unit) {
@@ -656,7 +688,7 @@ function unitBattleStats(unit) {
   let armor = unit.armor;
   let speed = unit.speed;
   unit.gear.forEach((gear) => {
-    const mods = effectiveMods(gear);
+    const mods = gearModsForUnit(gear, unit);
     hp += mods.hp || 0;
     atk += mods.atk || 0;
     armor += mods.armor || 0;
@@ -1069,11 +1101,19 @@ function teamComparison() {
 
 function gearTotals(unit) {
   return unit.gear.reduce((totals, gear) => {
-    Object.entries(effectiveMods(gear)).forEach(([key, value]) => {
+    Object.entries(gearModsForUnit(gear, unit)).forEach(([key, value]) => {
       totals[key] = Number(((totals[key] || 0) + value).toFixed(2));
     });
     return totals;
   }, {});
+}
+
+function gearTypeSummary(unit) {
+  if (!unit.gear.length) return "Type resonance: equip matching gear for +25% gear stats";
+  const matches = unit.gear.filter((gear) => typeMatched(unit, gear)).length;
+  return matches
+    ? `Type resonance: ${matches}/${unit.gear.length} matching gear (+25% each)`
+    : `Type resonance: no matches yet; ${unit.trait} gear gets +25% on this hero`;
 }
 
 function gearEffectSummary(unit) {
@@ -1105,7 +1145,7 @@ function unitCard(unit) {
         <p class="lore">${unit.lore}</p>
         <div class="chips">
           <span class="chip">${isActive ? `Active ${position + 1}` : "Benched"}</span>
-          <span class="chip">${unit.trait}</span>
+          <span class="chip">Type ${unit.trait}</span>
           <span class="chip">HP ${unit.maxHp}</span>
           <span class="chip">ATK ${unit.atk}</span>
           <span class="chip">ARM ${unit.armor}</span>
@@ -1118,6 +1158,7 @@ function unitCard(unit) {
         <div class="gear-summary">
           <strong>Gear effects</strong>
           <span>${gearEffectSummary(unit)}</span>
+          <span>${gearTypeSummary(unit)}</span>
           <span>Battle stats: HP ${stats.maxHp}, ATK ${stats.atk}, ARM ${stats.armor}, SPD ${stats.speed.toFixed(2)}</span>
         </div>
         <div class="loadout">
@@ -1185,9 +1226,11 @@ function gearUpgradeCost(gear) {
 }
 
 function gearRow(gear, equipped = false, ownerId = null) {
+  const owner = ownerId ? state.squad.find((unit) => unit.id === Number(ownerId)) : null;
+  const mods = owner ? gearModsForUnit(gear, owner) : effectiveMods(gear);
   return `
     <div class="gear-row">
-      <span class="gear-detail">${gear.name} Lv ${gear.level} | ${modText(effectiveMods(gear))} | ${qualityText(gear)}</span>
+      <span class="gear-detail">${gear.name} Lv ${gear.level} | ${modText(mods)} | ${qualityText(gear)} | ${typeMatchText(gear, owner)}</span>
       <span class="gear-actions">
         <button data-action="upgradeGear" data-gear-id="${gear.id}" ${state.credits < gearUpgradeCost(gear) ? "disabled" : ""}>Upgrade ${gearUpgradeCost(gear)}</button>
         <button data-action="sellGear" data-gear-id="${gear.id}">Sell +${sellValue(gear.investedCredits)}C</button>
@@ -1219,7 +1262,7 @@ function shopUnitCard(unit, index) {
         <h3>${unit.name}</h3>
         <p class="meta">${unit.role} | ${unit.ability}</p>
         <p class="lore">${unit.lore}</p>
-        <div class="chips"><span class="chip">${unit.trait}</span><span class="chip">Cost ${unit.cost}</span></div>
+        <div class="chips"><span class="chip">Type ${unit.trait}</span><span class="chip">Cost ${unit.cost}</span></div>
         <div class="row-actions"><button data-action="buyUnit" data-index="${index}" ${state.credits < unit.cost ? "disabled" : ""}>${state.squad.some((owned) => owned.template === unit.name) ? "Buy Duplicate Upgrade" : "Buy Unit"}</button></div>
       </div>
     </article>
@@ -1233,7 +1276,8 @@ function shopGearCard(gear, index) {
       ${portrait(spriteSrc("gear", gear.icon), gear.name)}
       <div>
         <h3>${gear.name}</h3>
-        <p class="meta">Lv 1 | ${modText(gear.mods)} | ${gear.trait}</p>
+        <p class="meta">Lv 1 | ${modText(gear.mods)} | Type ${gear.trait}</p>
+        <p class="meta">Match ${gear.trait} heroes: +${Math.round(TYPE_MATCH_BONUS * 100)}% gear stats</p>
         <p class="lore">${gear.lore}</p>
         <div class="chips"><span class="chip">Cost ${gear.cost}</span></div>
         <div class="row-actions"><button data-action="buyGear" data-index="${index}" ${state.credits < gear.cost ? "disabled" : ""}>Buy Gear</button></div>
@@ -1264,7 +1308,7 @@ function renderPanel() {
     const bonuses = traitBonuses();
     root.innerHTML = `
       ${threatIntel}
-      <div class="section-title"><span>Active Lineup</span><span>${bonuses.length ? bonuses.join(" | ") : "Front unit tanks, back units hit harder"}</span></div>
+      <div class="section-title"><span>Active Lineup</span><span>${bonuses.length ? bonuses.join(" | ") : "Types count active heroes and equipped gear"}</span></div>
       <div class="grid-list">${activeUnits().length ? activeUnits().map(unitCard).join("") : `<p class="empty">Deploy at least one hero before battle.</p>`}</div>
       <div class="section-title section-spaced"><span>Bench</span><span>Owned reserves</span></div>
       <div class="grid-list">${benchUnits().length ? benchUnits().map(unitCard).join("") : `<p class="empty">Bench units stay owned, can be upgraded and outfitted, but do not battle.</p>`}</div>
@@ -1279,7 +1323,8 @@ function renderPanel() {
               ${portrait(spriteSrc("gear", gear.icon), gear.name)}
             <div>
               <h3>${gear.name}</h3>
-              <p class="meta">Lv ${gear.level} | ${modText(effectiveMods(gear))} | ${gear.trait}</p>
+              <p class="meta">Lv ${gear.level} | ${modText(effectiveMods(gear))} | Type ${gear.trait}</p>
+              <p class="meta">${typeMatchText(gear)}</p>
               <p class="meta">${qualityText(gear)} | ${restText(gear)}</p>
               <p class="lore">${gear.lore}</p>
               <div class="row-actions">
@@ -1321,11 +1366,12 @@ function renderPage() {
           <section><h3>2. Line Up</h3><p>Deploy up to 4 active heroes. The first active hero is the frontline and draws fire; the backline gets extra attack.</p></section>
           <section><h3>3. Bench</h3><p>Bench heroes stay owned. You can equip and upgrade them without using an active battle slot.</p></section>
           <section><h3>4. Gear Quality</h3><p>Equipped gear loses quality when active heroes battle, reducing its bonuses. Unequip gear into the armory to restore more quality each rested battle.</p></section>
-          <section><h3>5. Upgrade</h3><p>Spend mutagens on hero upgrades and credits on gear upgrades. Gear slots are unlimited.</p></section>
-          <section><h3>6. Sell</h3><p>Sell units, gear, or trade ${MUTAGEN_SALE.cost} mutagens for ${MUTAGEN_SALE.credits} credits when you need resources. Refunds are useful but lower than the full investment.</p></section>
-          <section><h3>7. Scout</h3><p>Threat Intel shows the next enemy team, each enemy's stats, and whether your active lineup has the total stat advantage.</p></section>
-          <section><h3>8. Perform</h3><p>Squad cards track each hero's KOs, falls, and K/D ratio. After each battle, earn a grade from knockouts, survivors, and remaining HP.</p></section>
-          <section><h3>9. Win the Run</h3><p>Win by defeating all enemies. If every active hero falls, lose 1 health. Win 10 battles before health reaches 0.</p></section>
+          <section><h3>5. Types</h3><p>Types matter twice. Active heroes and equipped gear count toward team type bonuses at x2, and gear equipped to a matching hero gets +${Math.round(TYPE_MATCH_BONUS * 100)}% gear stats.</p></section>
+          <section><h3>6. Upgrade</h3><p>Spend mutagens on hero upgrades and credits on gear upgrades. Gear slots are unlimited.</p></section>
+          <section><h3>7. Sell</h3><p>Sell units, gear, or trade ${MUTAGEN_SALE.cost} mutagens for ${MUTAGEN_SALE.credits} credits when you need resources. Refunds are useful but lower than the full investment.</p></section>
+          <section><h3>8. Scout</h3><p>Threat Intel shows the next enemy team, each enemy's stats, and whether your active lineup has the total stat advantage.</p></section>
+          <section><h3>9. Perform</h3><p>Squad cards track each hero's KOs, falls, and K/D ratio. After each battle, earn a grade from knockouts, survivors, and remaining HP.</p></section>
+          <section><h3>10. Win the Run</h3><p>Win by defeating all enemies. If every active hero falls, lose 1 health. Win 10 battles before health reaches 0.</p></section>
         </div>
       </article>
     `;
@@ -1819,8 +1865,24 @@ function renderGameToText() {
       trait: unit.trait,
       combatRecord: record,
       gearEffects: gearTotals(unit),
+      typeResonance: {
+        matchingGear: unit.gear.filter((gear) => typeMatched(unit, gear)).length,
+        totalGear: unit.gear.length,
+        bonusPercent: Math.round(TYPE_MATCH_BONUS * 100),
+      },
       battleStats: { hp: stats.maxHp, atk: stats.atk, armor: stats.armor, speed: Number(stats.speed.toFixed(2)) },
-      gear: unit.gear.map((gear) => ({ id: gear.id, name: gear.name, level: gear.level, quality: Math.round(gearQuality(gear)), restBattles: gear.restBattles || 0, mods: gear.mods, effectiveMods: effectiveMods(gear) })),
+      gear: unit.gear.map((gear) => ({
+        id: gear.id,
+        name: gear.name,
+        trait: gear.trait,
+        level: gear.level,
+        quality: Math.round(gearQuality(gear)),
+        restBattles: gear.restBattles || 0,
+        typeMatched: typeMatched(unit, gear),
+        mods: gear.mods,
+        effectiveMods: effectiveMods(gear),
+        combatMods: gearModsForUnit(gear, unit),
+      })),
     };
   };
   const comparison = teamComparison();
@@ -1837,6 +1899,11 @@ function renderGameToText() {
     lastBattleGrade: state.lastBattleGrade,
     lastBattleTune: state.lastBattleTune,
     celebration: state.celebration ? { ttl: Number(state.celebration.ttl.toFixed(2)), max: state.celebration.max } : null,
+    typeRules: {
+      matchBonusPercent: Math.round(TYPE_MATCH_BONUS * 100),
+      activeTypeBonuses: traitBonuses(),
+      typeCounts: traitCounts(),
+    },
     adaptiveDifficulty: { ...difficulty },
     teamComparison: comparison,
     upcomingEnemies: plannedEnemies().map((enemy) => ({
