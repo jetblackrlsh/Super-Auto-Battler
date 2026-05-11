@@ -101,6 +101,7 @@ const state = {
   gear: [],
   shop: { units: [], gear: [] },
   selectedGearId: null,
+  resultBanner: null,
   battle: null,
   log: [],
   runWon: false,
@@ -113,6 +114,22 @@ function rand(max) {
 
 function pick(pool) {
   return pool[rand(pool.length)];
+}
+
+function activeUnits() {
+  return state.squad.filter((unit) => unit.active);
+}
+
+function benchUnits() {
+  return state.squad.filter((unit) => !unit.active);
+}
+
+function activeIndex(unit) {
+  return activeUnits().findIndex((candidate) => candidate.id === unit.id);
+}
+
+function sellValue(value) {
+  return Math.max(0, Math.floor(value * 0.75));
 }
 
 function cloneUnit(template) {
@@ -134,6 +151,10 @@ function cloneUnit(template) {
     atk: template.atk,
     armor: template.armor,
     speed: template.speed,
+    active: activeUnits().length < 5,
+    duplicateCount: 1,
+    investedCredits: template.cost,
+    investedMutagens: 0,
     gear: [],
   };
 }
@@ -146,6 +167,8 @@ function cloneGear(template) {
     cost: template.cost,
     trait: template.trait,
     lore: template.lore,
+    level: 1,
+    investedCredits: template.cost,
     mods: { ...template.mods },
   };
 }
@@ -196,6 +219,7 @@ function resetRun() {
     gear: [],
     shop: { units: [], gear: [] },
     selectedGearId: null,
+    resultBanner: null,
     battle: null,
     log: [],
     runWon: false,
@@ -219,14 +243,32 @@ function rerollShop(free = false) {
 }
 
 function buyUnit(index) {
-  if (state.mode !== "planning" || state.squad.length >= 5) return;
+  if (state.mode !== "planning") return;
   const template = state.shop.units[index];
   if (!template || state.credits < template.cost) return;
   state.credits -= template.cost;
-  state.squad.push(cloneUnit(template));
-  log(`${template.name} joined the Omega City resistance.`);
+  const owned = state.squad.find((unit) => unit.template === template.name);
+  if (owned) {
+    applyDuplicateUpgrade(owned, template.cost);
+    log(`${template.name} duplicate merged into ${owned.name}: level ${owned.level}.`);
+  } else {
+    const unit = cloneUnit(template);
+    state.squad.push(unit);
+    log(`${template.name} ${unit.active ? "joined the active lineup" : "joined the bench"}.`);
+  }
   state.shop.units.splice(index, 1, pick(HERO_POOL));
   renderAll();
+}
+
+function applyDuplicateUpgrade(unit, creditCost) {
+  unit.duplicateCount += 1;
+  unit.investedCredits += creditCost;
+  unit.level += 1;
+  unit.maxHp += 7;
+  unit.hp = unit.maxHp;
+  unit.atk += 2;
+  unit.armor += unit.level % 2 === 0 ? 1 : 0;
+  unit.speed += 0.035;
 }
 
 function buyGear(index) {
@@ -249,6 +291,7 @@ function upgradeUnit(id) {
   const cost = unit.level * 3;
   if (state.mutagens < cost) return;
   state.mutagens -= cost;
+  unit.investedMutagens += cost;
   unit.level += 1;
   unit.maxHp += 9;
   unit.hp = unit.maxHp;
@@ -269,6 +312,17 @@ function gearById(id) {
   return state.gear.find((candidate) => candidate.id === id);
 }
 
+function findGear(id) {
+  const gearId = Number(id);
+  const armoryGear = state.gear.find((candidate) => candidate.id === gearId);
+  if (armoryGear) return { gear: armoryGear, owner: null };
+  for (const unit of state.squad) {
+    const equipped = unit.gear.find((candidate) => candidate.id === gearId);
+    if (equipped) return { gear: equipped, owner: unit };
+  }
+  return { gear: null, owner: null };
+}
+
 function equipGear(unitId, gearId = state.selectedGearId) {
   if (!gearId || state.mode !== "planning") return;
   const unit = state.squad.find((candidate) => candidate.id === unitId);
@@ -281,8 +335,86 @@ function equipGear(unitId, gearId = state.selectedGearId) {
   renderAll();
 }
 
+function upgradeGear(gearId) {
+  if (state.mode !== "planning") return;
+  const { gear } = findGear(gearId);
+  if (!gear) return;
+  const cost = gear.level + 2;
+  if (state.credits < cost) return;
+  state.credits -= cost;
+  gear.investedCredits += cost;
+  gear.level += 1;
+  Object.entries(gear.mods).forEach(([key, value]) => {
+    gear.mods[key] = key === "speed" ? Number((value + 0.05).toFixed(2)) : value + Math.max(1, Math.round(value * 0.35));
+  });
+  log(`${gear.name} upgraded to level ${gear.level}.`);
+  renderAll();
+}
+
+function sellGear(gearId) {
+  if (state.mode !== "planning") return;
+  const { gear, owner } = findGear(gearId);
+  if (!gear) return;
+  const refund = sellValue(gear.investedCredits);
+  state.credits += refund;
+  if (owner) owner.gear = owner.gear.filter((candidate) => candidate.id !== gear.id);
+  else state.gear = state.gear.filter((candidate) => candidate.id !== gear.id);
+  if (state.selectedGearId === gear.id) state.selectedGearId = null;
+  log(`${gear.name} sold for ${refund} credits.`);
+  renderAll();
+}
+
+function sellUnit(id) {
+  if (state.mode !== "planning") return;
+  const unit = state.squad.find((candidate) => candidate.id === id);
+  if (!unit) return;
+  const creditRefund = sellValue(unit.investedCredits);
+  const mutagenRefund = sellValue(unit.investedMutagens);
+  state.credits += creditRefund;
+  state.mutagens += mutagenRefund;
+  state.gear.push(...unit.gear);
+  state.squad = state.squad.filter((candidate) => candidate.id !== unit.id);
+  log(`${unit.name} sold for ${creditRefund} credits and ${mutagenRefund} mutagens. Gear returned to armory.`);
+  renderAll();
+}
+
+function toggleBench(id) {
+  if (state.mode !== "planning") return;
+  const unit = state.squad.find((candidate) => candidate.id === id);
+  if (!unit) return;
+  if (unit.active) {
+    unit.active = false;
+    log(`${unit.name} moved to the bench.`);
+  } else if (activeUnits().length < 5) {
+    unit.active = true;
+    log(`${unit.name} deployed to the active lineup.`);
+  }
+  renderAll();
+}
+
+function moveUnit(id, direction) {
+  if (state.mode !== "planning") return;
+  const lineup = activeUnits();
+  const index = lineup.findIndex((unit) => unit.id === id);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= lineup.length) return;
+  const a = state.squad.findIndex((unit) => unit.id === lineup[index].id);
+  const b = state.squad.findIndex((unit) => unit.id === lineup[target].id);
+  [state.squad[a], state.squad[b]] = [state.squad[b], state.squad[a]];
+  log(`${lineup[index].name} shifted ${direction < 0 ? "toward the front" : "toward the back"}.`);
+  renderAll();
+}
+
+function sellMutagens() {
+  if (state.mode !== "planning" || state.mutagens < 2) return;
+  state.mutagens -= 2;
+  state.credits += 3;
+  log("Sold 2 mutagens for 3 credits.");
+  renderAll();
+}
+
 function traitCounts() {
-  return state.squad.reduce((counts, unit) => {
+  return activeUnits().reduce((counts, unit) => {
     counts[unit.trait] = (counts[unit.trait] || 0) + 1;
     unit.gear.forEach((gear) => {
       counts[gear.trait] = (counts[gear.trait] || 0) + 1;
@@ -351,26 +483,32 @@ function buildEnemies() {
 }
 
 function startBattle() {
-  if (state.mode !== "planning" || state.squad.length === 0 || state.runLost || state.runWon) return;
-  const heroes = state.squad.map((unit, index) => {
+  const lineup = activeUnits();
+  if (state.mode !== "planning" || lineup.length === 0 || state.runLost || state.runWon) return;
+  state.resultBanner = null;
+  const heroes = lineup.map((unit, index) => {
     const stats = unitBattleStats(unit);
+    const frontlineHp = index === 0 ? 8 : 0;
+    const frontlineArmor = index === 0 ? 3 : 0;
+    const backlineAttack = index >= Math.max(1, lineup.length - 2) ? 2 : 0;
     return {
       id: unit.id,
       name: unit.name,
       sprite: unit.sprite,
-      maxHp: stats.maxHp,
-      hp: stats.hp,
-      atk: stats.atk,
-      armor: stats.armor,
+      maxHp: stats.maxHp + frontlineHp,
+      hp: stats.hp + frontlineHp,
+      atk: stats.atk + backlineAttack,
+      armor: stats.armor + frontlineArmor,
       speed: stats.speed,
       side: "hero",
       fx: unit.fx,
       color: unit.color,
       midi: unit.midi,
       cooldown: 0.16 + index * 0.1,
-      x: 210 + index * 88,
+      x: 520 - index * 88,
       y: 380 + (index % 2) * 80,
       baseY: 380 + (index % 2) * 80,
+      formation: index === 0 ? "Frontline" : index >= Math.max(1, lineup.length - 2) ? "Backline" : "Midline",
       hitFlash: 0,
       attackFlash: 0,
     };
@@ -454,6 +592,7 @@ function finishBattle(won) {
   state.mutagens += mutagenGain;
   if (won) state.victories += 1;
   if (!won) state.health -= 1;
+  state.resultBanner = { text: won ? "VICTORY" : "DEFEAT", won };
   log(`${won ? "Victory" : "Defeat"}: +${creditGain} credits, +${mutagenGain} mutagens${won ? "." : ", -1 health."}`);
   if (state.health <= 0) {
     state.runLost = true;
@@ -494,7 +633,11 @@ function portrait(src, alt = "") {
 function unitCard(unit) {
   const upgradeCost = unit.level * 3;
   const selectedGear = gearById(state.selectedGearId);
-  const gearNames = unit.gear.map((gear) => gear.name).join(", ") || "No gear equipped";
+  const position = activeIndex(unit);
+  const isActive = unit.active;
+  const canDeploy = !isActive && activeUnits().length < 5;
+  const creditRefund = sellValue(unit.investedCredits);
+  const mutagenRefund = sellValue(unit.investedMutagens);
   return `
     <article class="card hero-card">
       ${portrait(spriteSrc("hero", unit.sprite), unit.name)}
@@ -503,19 +646,42 @@ function unitCard(unit) {
         <p class="meta">Lv ${unit.level} ${unit.role} | ${unit.ability}</p>
         <p class="lore">${unit.lore}</p>
         <div class="chips">
+          <span class="chip">${isActive ? `Active ${position + 1}` : "Benched"}</span>
           <span class="chip">${unit.trait}</span>
           <span class="chip">HP ${unit.maxHp}</span>
           <span class="chip">ATK ${unit.atk}</span>
           <span class="chip">ARM ${unit.armor}</span>
+          <span class="chip">Dupes ${unit.duplicateCount}</span>
           <span class="chip">Gear ${unit.gear.length}</span>
         </div>
-        <p class="loadout">${gearNames}</p>
+        <div class="loadout">
+          ${unit.gear.length ? unit.gear.map((gear) => gearRow(gear, true)).join("") : `<p>No gear equipped</p>`}
+        </div>
         <div class="row-actions">
+          <button data-action="moveUnit" data-id="${unit.id}" data-direction="-1" ${!isActive || position <= 0 ? "disabled" : ""}>Forward</button>
+          <button data-action="moveUnit" data-id="${unit.id}" data-direction="1" ${!isActive || position < 0 || position >= activeUnits().length - 1 ? "disabled" : ""}>Back</button>
+          <button data-action="toggleBench" data-id="${unit.id}" ${!isActive && !canDeploy ? "disabled" : ""}>${isActive ? "Bench" : "Deploy"}</button>
           <button data-action="upgradeUnit" data-id="${unit.id}" ${state.mutagens < upgradeCost ? "disabled" : ""}>Upgrade ${upgradeCost}</button>
           <button data-action="equipGear" data-id="${unit.id}" ${!selectedGear ? "disabled" : ""}>Equip ${selectedGear ? selectedGear.name : "Selected Gear"}</button>
+          <button data-action="sellUnit" data-id="${unit.id}">Sell +${creditRefund}C +${mutagenRefund}M</button>
         </div>
       </div>
     </article>
+  `;
+}
+
+function gearUpgradeCost(gear) {
+  return gear.level + 2;
+}
+
+function gearRow(gear, equipped = false) {
+  return `
+    <div class="gear-row">
+      <span>${gear.name} Lv ${gear.level} | ${modText(gear.mods)}</span>
+      <button data-action="upgradeGear" data-gear-id="${gear.id}" ${state.credits < gearUpgradeCost(gear) ? "disabled" : ""}>Upgrade ${gearUpgradeCost(gear)}</button>
+      <button data-action="sellGear" data-gear-id="${gear.id}">Sell +${sellValue(gear.investedCredits)}C</button>
+      ${equipped ? "" : ""}
+    </div>
   `;
 }
 
@@ -526,7 +692,7 @@ function renderPanel() {
   const root = document.getElementById("panelContent");
   if (activeTab === "shop") {
     root.innerHTML = `
-      <div class="section-title"><span>Recruit</span><span>Squad ${state.squad.length}/5</span></div>
+      <div class="section-title"><span>Recruit</span><span>Active ${activeUnits().length}/5 | Owned ${state.squad.length}</span></div>
       <div class="grid-list">
         ${state.shop.units.map((unit, index) => `
           <article class="card">
@@ -536,7 +702,7 @@ function renderPanel() {
               <p class="meta">${unit.role} | ${unit.ability}</p>
               <p class="lore">${unit.lore}</p>
               <div class="chips"><span class="chip">${unit.trait}</span><span class="chip">Cost ${unit.cost}</span></div>
-              <div class="row-actions"><button data-action="buyUnit" data-index="${index}" ${state.credits < unit.cost || state.squad.length >= 5 ? "disabled" : ""}>Buy Unit</button></div>
+              <div class="row-actions"><button data-action="buyUnit" data-index="${index}" ${state.credits < unit.cost ? "disabled" : ""}>${state.squad.some((owned) => owned.template === unit.name) ? "Buy Duplicate Upgrade" : "Buy Unit"}</button></div>
             </div>
           </article>
         `).join("")}
@@ -548,7 +714,7 @@ function renderPanel() {
             ${portrait(spriteSrc("gear", gear.icon), gear.name)}
             <div>
               <h3>${gear.name}</h3>
-              <p class="meta">${modText(gear.mods)} | ${gear.trait}</p>
+              <p class="meta">Lv 1 | ${modText(gear.mods)} | ${gear.trait}</p>
               <p class="lore">${gear.lore}</p>
               <div class="chips"><span class="chip">Cost ${gear.cost}</span></div>
               <div class="row-actions"><button data-action="buyGear" data-index="${index}" ${state.credits < gear.cost ? "disabled" : ""}>Buy Gear</button></div>
@@ -560,8 +726,10 @@ function renderPanel() {
   } else if (activeTab === "squad") {
     const bonuses = traitBonuses();
     root.innerHTML = `
-      <div class="section-title"><span>Squad</span><span>${bonuses.length ? bonuses.join(" | ") : "Build synergies"}</span></div>
-      <div class="grid-list">${state.squad.length ? state.squad.map(unitCard).join("") : `<p class="empty">Recruit heroes from the shop.</p>`}</div>
+      <div class="section-title"><span>Active Lineup</span><span>${bonuses.length ? bonuses.join(" | ") : "Front unit tanks, back units hit harder"}</span></div>
+      <div class="grid-list">${activeUnits().length ? activeUnits().map(unitCard).join("") : `<p class="empty">Deploy at least one hero before battle.</p>`}</div>
+      <div class="section-title section-spaced"><span>Bench</span><span>Owned reserves</span></div>
+      <div class="grid-list">${benchUnits().length ? benchUnits().map(unitCard).join("") : `<p class="empty">Bench units stay owned, can be upgraded and outfitted, but do not battle.</p>`}</div>
     `;
   } else {
     root.innerHTML = `
@@ -572,11 +740,13 @@ function renderPanel() {
             ${portrait(spriteSrc("gear", gear.icon), gear.name)}
             <div>
               <h3>${gear.name}</h3>
-              <p class="meta">${modText(gear.mods)} | ${gear.trait}</p>
+              <p class="meta">Lv ${gear.level} | ${modText(gear.mods)} | ${gear.trait}</p>
               <p class="lore">${gear.lore}</p>
               <div class="row-actions">
                 <button data-action="selectGear" data-id="${gear.id}">${state.selectedGearId === gear.id ? "Selected" : "Select"}</button>
                 ${state.squad.map((unit) => `<button data-action="equipGearDirect" data-gear-id="${gear.id}" data-id="${unit.id}">Equip to ${unit.name}</button>`).join("")}
+                <button data-action="upgradeGear" data-gear-id="${gear.id}" ${state.credits < gearUpgradeCost(gear) ? "disabled" : ""}>Upgrade ${gearUpgradeCost(gear)}</button>
+                <button data-action="sellGear" data-gear-id="${gear.id}">Sell +${sellValue(gear.investedCredits)}C</button>
               </div>
             </div>
           </article>
@@ -607,12 +777,12 @@ function renderPage() {
       <article class="info-card">
         <h2>How to Play</h2>
         <div class="info-grid">
-          <section><h3>1. Build</h3><p>Spend credits on heroes and gear. The shop changes after every battle, and rerolling costs 2 credits.</p></section>
-          <section><h3>2. Upgrade</h3><p>Spend mutagens on hero upgrades. Higher levels raise health, attack, armor, and scaling potential.</p></section>
-          <section><h3>3. Equip</h3><p>Select any gear in the Armory and equip it to any hero. There is no gear limit, so wild stacked builds are valid.</p></section>
-          <section><h3>4. Battle</h3><p>Start battle and watch your squad fight automatically. Win by defeating all enemies. If every hero falls, lose 1 health.</p></section>
-          <section><h3>5. Win the Run</h3><p>Earn credits and mutagens after every battle. Victories pay a bonus. Win 10 battles before health reaches 0.</p></section>
-          <section><h3>Controls</h3><p>Click buttons, use arrow keys plus Enter, or use a gamepad: D-pad moves focus, A selects, X rerolls, Y starts battle.</p></section>
+          <section><h3>1. Build</h3><p>Spend credits on heroes and gear. Buying a duplicate hero merges it into your owned copy as a free level upgrade.</p></section>
+          <section><h3>2. Line Up</h3><p>Deploy up to 5 active heroes. The first active hero is the frontline and draws fire; the backline gets extra attack.</p></section>
+          <section><h3>3. Bench</h3><p>Bench heroes stay owned. You can equip and upgrade them without using an active battle slot.</p></section>
+          <section><h3>4. Upgrade</h3><p>Spend mutagens on hero upgrades and credits on gear upgrades. Gear slots are unlimited.</p></section>
+          <section><h3>5. Sell</h3><p>Sell units, gear, or 2 mutagens when you need resources. Refunds are useful but lower than the full investment.</p></section>
+          <section><h3>6. Win the Run</h3><p>Win by defeating all enemies. If every active hero falls, lose 1 health. Win 10 battles before health reaches 0.</p></section>
         </div>
       </article>
     `;
@@ -645,26 +815,29 @@ function renderCanvas() {
   } else {
     drawPlanningPreview();
   }
+  if (state.resultBanner) drawResultBanner(state.resultBanner);
 }
 
 function drawHeaderText() {
   ctx.save();
   ctx.fillStyle = "rgba(255,255,255,0.93)";
-  ctx.strokeStyle = "rgba(17, 19, 38, 0.55)";
+  ctx.strokeStyle = "#000";
   ctx.lineWidth = 6;
   ctx.font = "900 42px system-ui";
   const title = state.runWon ? "OMEGA CITY SAVED" : state.runLost ? "OMEGA CITY FALLEN" : state.mode === "battle" ? "AUTO BATTLE" : "PREPARE THE TEAM";
   ctx.strokeText(title, 38, 66);
   ctx.fillText(title, 38, 66);
   ctx.font = "800 21px system-ui";
-  ctx.fillText(`${state.victories}/10 victories secured. The next wave is stronger.`, 40, 98);
+  const subtitle = `${state.victories}/10 victories secured. Frontline draws fire; backline hits harder.`;
+  ctx.strokeText(subtitle, 40, 98);
+  ctx.fillText(subtitle, 40, 98);
   ctx.restore();
 }
 
 function drawPlanningPreview() {
-  const previewHeroes = state.squad.slice(0, 5).map((unit, index) => {
+  const previewHeroes = activeUnits().slice(0, 5).map((unit, index) => {
     const stats = unitBattleStats(unit);
-    return { ...stats, name: unit.name, sprite: unit.sprite, side: "hero", color: unit.color, x: 210 + index * 118, y: 475, baseY: 475, hp: stats.maxHp, maxHp: stats.maxHp, hitFlash: 0, attackFlash: 0 };
+    return { ...stats, name: unit.name, sprite: unit.sprite, side: "hero", color: unit.color, x: 520 - index * 90, y: 475, baseY: 475, hp: stats.maxHp, maxHp: stats.maxHp, hitFlash: 0, attackFlash: 0 };
   });
   previewHeroes.forEach(drawFighter);
   const scale = 1 + (state.stage - 1) * 0.18;
@@ -676,11 +849,11 @@ function drawPlanningPreview() {
   enemies.forEach(drawFighter);
   ctx.save();
   ctx.fillStyle = "rgba(255,255,255,0.92)";
-  ctx.strokeStyle = "rgba(17,19,38,0.55)";
+  ctx.strokeStyle = "#000";
   ctx.lineWidth = 4;
   ctx.font = "900 22px system-ui";
-  ctx.strokeText("Your Squad", 226, 620);
-  ctx.fillText("Your Squad", 226, 620);
+  ctx.strokeText("Frontline -> Backline", 220, 620);
+  ctx.fillText("Frontline -> Backline", 220, 620);
   ctx.strokeText(`Battle ${state.victories + 1} Threat`, 805, 620);
   ctx.fillText(`Battle ${state.victories + 1} Threat`, 805, 620);
   ctx.restore();
@@ -707,7 +880,7 @@ function drawFighter(unit) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   drawHealth(unit.x - 45 + lunge, unit.y - 105, 90, unit.hp / unit.maxHp, unit.side);
   ctx.fillStyle = "rgba(255,255,255,0.98)";
-  ctx.strokeStyle = "rgba(17,19,38,0.7)";
+  ctx.strokeStyle = "#000";
   ctx.lineWidth = 4;
   ctx.font = "800 15px system-ui";
   ctx.textAlign = "center";
@@ -789,12 +962,42 @@ function drawFloater(floater) {
   ctx.save();
   ctx.globalAlpha = Math.max(0, floater.ttl);
   ctx.fillStyle = floater.side === "hero" ? "#ff4b8b" : "#fff05b";
-  ctx.strokeStyle = "rgba(17,19,38,0.78)";
+  ctx.strokeStyle = "#000";
   ctx.lineWidth = 4;
   ctx.font = "900 28px system-ui";
   ctx.textAlign = "center";
   ctx.strokeText(floater.text, floater.x, floater.y);
   ctx.fillText(floater.text, floater.x, floater.y);
+  ctx.restore();
+}
+
+function drawResultBanner(banner) {
+  ctx.save();
+  const grad = ctx.createLinearGradient(320, 230, 960, 350);
+  if (banner.won) {
+    grad.addColorStop(0, "rgba(255, 233, 95, 0.96)");
+    grad.addColorStop(0.5, "rgba(23, 232, 255, 0.94)");
+    grad.addColorStop(1, "rgba(126, 255, 112, 0.94)");
+  } else {
+    grad.addColorStop(0, "rgba(255, 63, 142, 0.96)");
+    grad.addColorStop(1, "rgba(88, 30, 130, 0.94)");
+  }
+  ctx.fillStyle = grad;
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.roundRect(330, 245, 620, 138, 18);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#fff";
+  ctx.font = "900 78px system-ui";
+  ctx.textAlign = "center";
+  ctx.strokeText(banner.text, 640, 337);
+  ctx.fillText(banner.text, 640, 337);
+  ctx.font = "900 22px system-ui";
+  const detail = banner.won ? "Bonus rewards earned" : "Health lost, regroup in the shop";
+  ctx.strokeText(detail, 640, 370);
+  ctx.fillText(detail, 640, 370);
   ctx.restore();
 }
 
@@ -822,10 +1025,16 @@ function handleAction(target) {
   ensureAudio();
   if (action === "startBattle") startBattle();
   if (action === "rerollShop") rerollShop(false);
+  if (action === "sellMutagens") sellMutagens();
   if (action === "newRun") resetRun();
   if (action === "buyUnit") buyUnit(Number(target.dataset.index));
   if (action === "buyGear") buyGear(Number(target.dataset.index));
   if (action === "upgradeUnit") upgradeUnit(Number(target.dataset.id));
+  if (action === "upgradeGear") upgradeGear(Number(target.dataset.gearId));
+  if (action === "sellGear") sellGear(Number(target.dataset.gearId));
+  if (action === "sellUnit") sellUnit(Number(target.dataset.id));
+  if (action === "toggleBench") toggleBench(Number(target.dataset.id));
+  if (action === "moveUnit") moveUnit(Number(target.dataset.id), Number(target.dataset.direction));
   if (action === "selectGear") selectGear(Number(target.dataset.id));
   if (action === "equipGear") equipGear(Number(target.dataset.id));
   if (action === "equipGearDirect") equipGear(Number(target.dataset.id), Number(target.dataset.gearId));
@@ -922,12 +1131,15 @@ function renderGameToText() {
     stage: state.stage,
     credits: state.credits,
     mutagens: state.mutagens,
-    squad: state.squad.map((unit) => ({ name: unit.name, level: unit.level, trait: unit.trait, gear: unit.gear.map((gear) => gear.name) })),
+    activeLineup: activeUnits().map((unit, index) => ({ name: unit.name, level: unit.level, position: index + 1, formation: index === 0 ? "frontline" : index >= Math.max(1, activeUnits().length - 2) ? "backline" : "midline", trait: unit.trait, gear: unit.gear.map((gear) => `${gear.name} Lv ${gear.level}`) })),
+    bench: benchUnits().map((unit) => ({ name: unit.name, level: unit.level, trait: unit.trait, gear: unit.gear.map((gear) => `${gear.name} Lv ${gear.level}`) })),
+    armory: state.gear.map((gear) => ({ name: gear.name, level: gear.level })),
     shop: {
       units: state.shop.units.map((unit) => unit.name),
       gear: state.shop.gear.map((gear) => gear.name),
     },
     selectedGear: gearById(state.selectedGearId)?.name || null,
+    resultBanner: state.resultBanner?.text || null,
     runWon: state.runWon,
     runLost: state.runLost,
     battle,

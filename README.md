@@ -2,7 +2,9 @@
 
 A static, single-player superhero roguelike auto battler for GitHub Pages.
 
-The run loop is built around recruiting heroes, buying gear, upgrading units with mutagens, stacking gear on any hero, starting an automatic battle, then using the rewards to adapt the next shop. The player starts with 10 health and loses 1 health whenever all player units die in battle. Winning requires defeating every enemy unit, and a run is won after 10 battle victories.
+The run loop is built around recruiting heroes, buying duplicates to upgrade owned heroes, buying and upgrading gear, stacking gear on any hero, benching/deploying units, arranging the active lineup, starting an automatic battle, then using the rewards to adapt the next shop. The player starts with 10 health and loses 1 health whenever all active player units die in battle. Winning requires defeating every enemy unit, and a run is won after 10 battle victories.
+
+Active lineup order matters: the first active hero is the frontline and draws enemy fire with a defensive bonus, while the backline gets extra attack. Benched heroes remain owned and can still be upgraded or outfitted.
 
 ## Play Locally
 

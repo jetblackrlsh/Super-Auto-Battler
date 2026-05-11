@@ -24,6 +24,17 @@ Original prompt: Make this project a public git hub repo. I want this to be a st
 - Restyled the UI around the generated page background, transparent logo, neon anime colors, stronger panels, and transparent sprites.
 - Verification: `node --check app.js`; web-game Playwright battle smoke with no console errors; desktop How/Story screenshots; mid-battle effects screenshot; mobile Battle/Story screenshots; custom long-run Playwright automation reached `victories: 10` and `runWon: true` with a heavily stacked gear build.
 
+## 2026-05-10 Management Follow-up
+
+- Added duplicate-unit purchases: buying a unit already owned now merges into that unit and upgrades it using credits.
+- Added active lineup vs bench state. Owned benched units can be upgraded and outfitted without taking an active battle slot.
+- Added active lineup ordering controls. The first active unit becomes the frontline, draws enemy fire, and gets a defensive bonus; the backline gets extra attack.
+- Added unit selling with partial credit and mutagen refunds, returning equipped gear to the armory.
+- Added gear upgrading with credits and gear selling with partial credit refunds from both armory and equipped gear.
+- Added a Sell Mutagens action that trades 2 mutagens for 3 credits.
+- Added persistent Victory/Defeat battle result banners and black outlines for battle-area text.
+- Verification: `node --check app.js`; custom Playwright management flow covering duplicate upgrade, mutagen sale, active reorder, bench/deploy, unit sale, gear buy/upgrade/sell, battle finish banner; web-game client smoke test with no console errors and screenshot review of the Defeat banner.
+
 ## TODO
 
-- Commit and push the follow-up implementation, then verify GitHub Pages updates.
+- Commit and push the management follow-up, then verify GitHub Pages updates.

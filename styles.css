@@ -193,7 +193,7 @@ h1 {
 
 .battle-actions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
   padding: 10px;
 }
@@ -288,8 +288,31 @@ h1 {
 }
 
 .loadout {
+  display: grid;
+  gap: 5px;
   color: #233258;
   font-weight: 800;
+}
+
+.loadout p {
+  margin: 0;
+}
+
+.gear-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 5px;
+  align-items: center;
+  padding: 5px;
+  border: 1px solid rgba(17, 19, 38, 0.09);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.gear-row button {
+  min-height: 28px;
+  padding: 0 7px;
+  font-size: 0.72rem;
 }
 
 .chips {
@@ -442,6 +465,14 @@ h1 {
 
   .card {
     grid-template-columns: 62px minmax(0, 1fr);
+  }
+
+  .battle-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .gear-row {
+    grid-template-columns: 1fr;
   }
 
   .portrait {
