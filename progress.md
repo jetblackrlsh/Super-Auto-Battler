@@ -73,6 +73,15 @@ Original prompt: Make this project a public git hub repo. I want this to be a st
 - Updated `render_game_to_text()` so empty shop slots are reported as `null`.
 - Verification: `node --check app.js`; deterministic Playwright flow bought a unit and gear, confirmed those slots became `null` and showed Sold Out cards, confirmed reroll filled all slots, confirmed post-battle refresh filled all slots, inspected screenshots for each state, and found no console errors; web-game Playwright smoke test rendered a normal battle with no error artifacts.
 
+## 2026-05-10 Crop and Adaptive Difficulty Follow-up
+
+- Audited every transparent hero, villain, and gear sprite, rebuilt the cutouts from the generated atlas with safer padding, removed checkerboard remnants, and cleaned detached artifact fragments.
+- Added stronger neon drop shadows to the transparent logo so it reads better over the bright page background.
+- Added a heavier dark canvas outline/shadow to the battle header subtitle under `Prepare The Team`.
+- Added grade-adaptive difficulty: S/A grades add the most next-battle threat, B adds a smaller bump, C stays neutral, and D/F ease pressure slightly.
+- Exposed `lastBattleGrade` and `adaptiveDifficulty` in `render_game_to_text()` for verification.
+- Verification: `node --check app.js`; sprite crop contact sheet inspection in `output/asset-crop-audit-cleaned.png`; Playwright screenshot inspection of planning and adaptive battle states with no console errors; S-grade adaptive probe confirmed stage 2 spawned 4 enemies with the `Omega City crisis spike` modifier; web-game Playwright smoke test rendered a normal battle with no error artifacts.
+
 ## TODO
 
-- No open TODOs for the shop slot follow-up.
+- No open TODOs for the crop and adaptive difficulty follow-up.

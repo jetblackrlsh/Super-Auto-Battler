@@ -91,6 +91,14 @@ const GRADE_REWARDS = {
   D: { credits: 3, mutagens: 1 },
   F: { credits: 2, mutagens: 1 },
 };
+const GRADE_DIFFICULTY = {
+  S: { threat: 0.28, extraEnemies: 1, label: "Omega City crisis spike" },
+  A: { threat: 0.18, extraEnemies: 1, label: "villains escalate" },
+  B: { threat: 0.08, extraEnemies: 0, label: "villains adapt" },
+  C: { threat: 0, extraEnemies: 0, label: "standard threat" },
+  D: { threat: -0.05, extraEnemies: 0, label: "villains hesitate" },
+  F: { threat: -0.1, extraEnemies: 0, label: "villains regroup" },
+};
 
 let uid = 1;
 let activeTab = "shop";
@@ -116,6 +124,7 @@ const state = {
   log: [],
   runWon: false,
   runLost: false,
+  lastBattleGrade: null,
 };
 
 function rand(max) {
@@ -260,6 +269,7 @@ function resetRun() {
     log: [],
     runWon: false,
     runLost: false,
+    lastBattleGrade: null,
   });
   rerollShop(true);
   state.squad.push(cloneUnit(HERO_POOL[0]));
@@ -500,9 +510,14 @@ function unitBattleStats(unit) {
   return { hp, maxHp: hp, atk, armor, speed };
 }
 
+function adaptiveDifficulty() {
+  return GRADE_DIFFICULTY[state.lastBattleGrade] || { threat: 0, extraEnemies: 0, label: "first assault" };
+}
+
 function buildEnemies() {
-  const count = Math.min(5, 2 + Math.floor(state.stage / 2));
-  const scale = 1 + (state.stage - 1) * 0.18;
+  const adaptive = adaptiveDifficulty();
+  const count = Math.min(5, 2 + Math.floor(state.stage / 2) + adaptive.extraEnemies);
+  const scale = Math.max(0.75, 1 + (state.stage - 1) * 0.18 + adaptive.threat);
   const enemies = [];
   for (let i = 0; i < count; i += 1) {
     const template = i === count - 1 && state.stage % 3 === 0 ? VILLAIN_POOL[7] : pick(VILLAIN_POOL);
@@ -513,8 +528,8 @@ function buildEnemies() {
       maxHp: Math.round(template.hp * scale),
       hp: Math.round(template.hp * scale),
       atk: Math.round(template.atk * scale),
-      armor: Math.round(template.armor + state.stage * 0.3),
-      speed: template.speed + state.stage * 0.018,
+      armor: Math.max(0, Math.round(template.armor + state.stage * 0.3 + adaptive.threat * 3)),
+      speed: Math.max(0.45, template.speed + state.stage * 0.018 + adaptive.threat * 0.08),
       side: "enemy",
       fx: template.fx,
       color: template.color,
@@ -706,6 +721,7 @@ function finishBattle(won) {
   const mutagenGain = performance.rewards.mutagens;
   state.credits += creditGain;
   state.mutagens += mutagenGain;
+  state.lastBattleGrade = performance.grade;
   if (won) state.victories += 1;
   if (!won) state.health -= 1;
   state.resultBanner = { text: won ? "VICTORY" : "DEFEAT", won, performance };
@@ -989,12 +1005,18 @@ function drawHeaderText() {
   ctx.save();
   ctx.fillStyle = "rgba(255,255,255,0.93)";
   ctx.strokeStyle = "#000";
+  ctx.shadowColor = "rgba(0,0,0,0.55)";
+  ctx.shadowBlur = 8;
+  ctx.shadowOffsetX = 2;
+  ctx.shadowOffsetY = 3;
   ctx.lineWidth = 6;
   ctx.font = "900 42px system-ui";
   const title = state.runWon ? "OMEGA CITY SAVED" : state.runLost ? "OMEGA CITY FALLEN" : state.mode === "battle" ? "AUTO BATTLE" : "PREPARE THE TEAM";
   ctx.strokeText(title, 38, 66);
   ctx.fillText(title, 38, 66);
   ctx.font = "800 21px system-ui";
+  ctx.lineWidth = 8;
+  ctx.shadowBlur = 10;
   const subtitle = `${state.victories}/10 victories secured. Frontline draws fire; backline hits harder.`;
   ctx.strokeText(subtitle, 40, 98);
   ctx.fillText(subtitle, 40, 98);
@@ -1030,8 +1052,8 @@ function drawFighter(unit) {
   const src = spriteSrc(unit.side === "enemy" ? "villain" : "hero", unit.sprite);
   const img = spriteCache.get(src);
   const scale = unit.side === "hero" ? 1 : -1;
-  const w = unit.side === "hero" ? 112 : 112;
-  const h = unit.side === "hero" ? 178 : 164;
+  const w = unit.side === "hero" ? 150 : 140;
+  const h = unit.side === "hero" ? 218 : 200;
   const pulse = unit.hitFlash > 0 ? 16 : 0;
   const lunge = unit.attackFlash > 0 ? (unit.side === "hero" ? 18 : -18) : 0;
   const defeated = unit.defeated || unit.hp <= 0;
@@ -1359,6 +1381,7 @@ function loop(now) {
 }
 
 function renderGameToText() {
+  const difficulty = adaptiveDifficulty();
   const battle = state.battle ? {
     status: state.battle.status,
     heroes: state.battle.heroes.map(({ name, hp, maxHp, atk, armor, x, y, defeated }) => ({ name, hp: Math.round(hp), maxHp, atk, armor, defeated: !!defeated, x: Math.round(x), y: Math.round(y) })),
@@ -1388,6 +1411,8 @@ function renderGameToText() {
     stage: state.stage,
     credits: state.credits,
     mutagens: state.mutagens,
+    lastBattleGrade: state.lastBattleGrade,
+    adaptiveDifficulty: { ...difficulty },
     activeLineup: activeUnits().map(unitSummary),
     bench: benchUnits().map((unit, index) => unitSummary(unit, index)),
     armory: state.gear.map((gear) => ({ name: gear.name, level: gear.level })),

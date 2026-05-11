@@ -104,7 +104,10 @@ button:disabled {
   width: min(520px, 82vw);
   height: auto;
   display: block;
-  filter: drop-shadow(0 12px 22px rgba(23, 200, 255, 0.28));
+  filter:
+    drop-shadow(0 4px 0 rgba(6, 9, 28, 0.92))
+    drop-shadow(0 12px 22px rgba(23, 200, 255, 0.45))
+    drop-shadow(0 0 18px rgba(255, 63, 142, 0.38));
 }
 
 h1 {
